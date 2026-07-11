@@ -17,7 +17,7 @@ from PySide6.QtGui import QPageSize
 
 from services.lista_aptos_service import ListaAptosService
 from services.auth_service import SesionUsuario
-from utils.exportar_excel import ExportarExcel
+from utils.exportar_aptos import ExportarExcel
 from utils.exportar_pdf import ExportarPDF
 
 
@@ -255,6 +255,10 @@ class ListaAptosWidget(QWidget):
                 item_estado.setForeground(QColor("#C0392B"))
 
             self.tabla_aptos.setItem(fila, 6, item_estado)
+            from PySide6.QtWidgets import QHeaderView
+
+            header = self.tabla_aptos.horizontalHeader()
+            header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
         self._actualizar_informacion(resultado)
 

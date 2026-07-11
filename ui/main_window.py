@@ -7,11 +7,12 @@ from PySide6.QtWidgets import (
     QApplication, QSizePolicy, QDialog
 )
 
+from ui.configuracion_sistema_dialog import ConfiguracionSistemaDialog
 from services.auth_service import AuthService, SesionUsuario
 from utils.themes import ThemeManager
 from ui.estudiantes import ListaEstudiantesWidget
 from ui.talleres import ListaTalleresWidget
-from ui.asistencia import RegistroAsistenciaDialog
+from ui.asistencia import PanelRegistrarAsistencia
 from ui.reportes import DashboardWidget
 from ui.reportes.reporte_sesion_dialog import ReporteAsistenciaDialog
 from ui.reportes.reportes_principal_dialog import ReportesPrincipalDialog
@@ -32,7 +33,7 @@ MODULOS = [
     ("Estudiantes",     "👨‍🎓", ["Administrador"],            ListaEstudiantesWidget),  # Sprint 2
     ("Docentes",        "👩‍🏫", ["Administrador"],            PanelGestionarDocentes),  # Sprint 2 (extra)
     ("Talleres",        "🎯", ["Administrador", "Docente"],    ListaTalleresWidget),  # Sprint 3
-    ("Asistencia",      "📋", ["Administrador", "Docente"],RegistroAsistenciaDialog),  # Sprint 4
+    ("Asistencia",      "📋", ["Administrador", "Docente"],PanelRegistrarAsistencia),  # Sprint 4
     ("Lista de Aptos",  "✅", ["Administrador"],                   ListaAptosWidget),  # Sprint 5
     ("Bienes",          "📦", ["Administrador", "Operador"],      ListaBienesWidget),  # Sprint 6
     ("Reportes",        "📊", ["Administrador"],               ReportesPrincipalDialog),  # Sprint 7
@@ -59,8 +60,8 @@ class MainWindow(QMainWindow):
 
     def _configurar_ventana(self) -> None:
         self.setWindowTitle(f"Sistema de Talleres UNAB — {self.sesion.nombre_completo}")
-        self.setMinimumSize(1024, 680)
-        self.resize(1200, 760)
+        self.setMinimumSize(1024, 640)
+        self.resize(1024, 740)
         # Centrar en pantalla
         pantalla = QApplication.primaryScreen().geometry()
         x = (pantalla.width()  - self.width())  // 2
@@ -72,36 +73,45 @@ class MainWindow(QMainWindow):
 
             /* ── Sidebar ─────────────────────────────────── */
             QWidget#sidebar {
-                background-color: #1e1d2e;
                 min-width: 220px;
                 max-width: 220px;
             }
             QLabel#sidebar_titulo {
-                color: #9B99C4;
+                color: #534AB7;
                 font-size: 14px;
                 font-weight: 600;
                 padding: 0 16px;
             }
             QLabel#sidebar_rol {
-                color: #9b99c4;
                 font-size: 11px;
                 padding: 0 16px;
             }
+            QMenuBar {
+                border: none; 
+            }
             QMenuBar::item {
-                    padding: 4px 16px;
-                    min-width: 350px;
-                }
+                padding: 6px 18px;   
+                margin: 2px;
+                border: none;        
+            }
+            QMenu {
+                border: 1px solid #ccc;
+            }
+            QMenu::item {
+                padding: 6px 22px;  
+                border: none;
+            }
+                
             QPushButton#btn_modulo {
                 text-align: left;
                 padding: 11px 20px;
                 border: none;
                 background: transparent;
-                color: #c2c0d4;
                 font-size: 13px;
                 border-radius: 0;
             }
             QPushButton#btn_modulo:hover {
-                background-color: #2d2b45;
+                background-color: #534AB7;
                 color: #ffffff;
             }
             QPushButton#btn_modulo[activo="true"] {
@@ -117,16 +127,9 @@ class MainWindow(QMainWindow):
                 color: #ff8a80;
                 font-size: 13px;
             }
-            QPushButton#btn_logout:hover { background-color: #2d2b45; }
+            QPushButton#btn_logout:hover {
+                background-color: #2d2b45; }
 
-            /* ── Área central ────────────────────────────── */
-            QWidget#area_central {
-                background-color: #f8f7f4;
-            }
-            QLabel#bienvenida_sub {
-                font-size: 14px;
-                color: #73726c;
-            }
         """)
 
     # ══════════════════════════════════════════════════════════════
@@ -160,12 +163,17 @@ class MainWindow(QMainWindow):
 
         # ── Menú: Apariencia ─────────────────────────────────────
         menu_apariencia = barra.addMenu("Apariencia")
-
         act_tema = QAction("🌙 Cambiar tema", self)
         act_tema.triggered.connect(self._toggle_tema)
         self._actualizar_texto_tema()
 
         menu_apariencia.addAction(act_tema)
+
+        # ── Menú: Configuracion ─────────────────────────────────────
+        menu_config = barra.addMenu("Configuración")
+        act_cambiar_logo = QAction ("Cambiar Logo",self)
+        act_cambiar_logo.triggered.connect(self._config_logo)
+        menu_config.addAction(act_cambiar_logo)
 
     # ══════════════════════════════════════════════════════════════
     # UI CENTRAL (sidebar + área de contenido)
@@ -401,10 +409,6 @@ class MainWindow(QMainWindow):
         self.close()     # cierra MainWindow → el main.py mostrará login de nuevo
 
     def _toggle_tema(self) -> None:
-        """
-        Alterna entre tema claro y oscuro en tiempo real.
-        Atajo de teclado: Ctrl+Shift+T
-        """
         from PySide6.QtWidgets import QApplication
         ThemeManager.toggle(QApplication.instance())
         self._actualizar_texto_tema()
@@ -420,6 +424,11 @@ class MainWindow(QMainWindow):
         from ui.cambio_password_dialog import CambioPasswordDialog
         dialogo = CambioPasswordDialog(self.sesion, self)
         dialogo.exec()
+
+    def _config_logo(self) -> None:
+        """Abre el diálogo de configuración del sistema"""
+        dlg = ConfiguracionSistemaDialog(self.sesion, self)
+        dlg.exec()
 
     def closeEvent(self, event) -> None:
         if self.sesion:

@@ -30,7 +30,7 @@ class ListaBienesWidget(QWidget):
         self._timer.setSingleShot(True)
         self._timer.setInterval(350) 
 
-        self.setMinimumSize(1000, 620)
+
         self.setWindowTitle("Lista de bienes")
         self.setWindowFlags(
             self.windowFlags() &

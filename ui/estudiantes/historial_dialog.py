@@ -139,7 +139,6 @@ class HistorialDialog(QDialog):
     def _cargar_datos(self):
         datos_est = EstudianteService.obtener_por_id(self.estudiante_id)
         historial = EstudianteService.obtener_historial(self.estudiante_id)
-        print(datos_est)
 
         if datos_est:
             self.setWindowTitle(

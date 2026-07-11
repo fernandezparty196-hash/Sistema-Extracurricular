@@ -25,7 +25,6 @@ class ReportesPrincipalDialog(QWidget):
         self.sesion = sesion_usuario
         self.reporte_service = ReporteService()
         
-        self.setMinimumSize(1000, 620)
         self.setWindowTitle("Lista estudiantes")
         self.setWindowFlags(
             self.windowFlags() &

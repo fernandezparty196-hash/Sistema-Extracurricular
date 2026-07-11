@@ -419,7 +419,7 @@ class EstudianteService:
                     talleres_cursados.append({
                         "taller_id":          taller.id,
                         "taller_nombre":      taller.nombre,
-                        "ciclo":              taller.ciclo_academico_id,
+                        "ciclo":              taller.ciclo_academico.nombre,
                         "docente":            taller.docente.nombre_completo,
                         "sesiones_asistidas": asistidas,
                         "sesiones_totales":   sesiones_realizadas,
@@ -552,3 +552,17 @@ class EstudianteService:
                 return {estado: total for estado, total in resultados}
         except SQLAlchemyError:
             return {}
+        
+    @staticmethod
+    def obtener_por_dni(dni: str) -> dict | None:
+        with get_session() as session:
+            est = session.query(Estudiante).filter(Estudiante.dni == dni).first()
+            if not est:
+                return None
+            return {
+                "id": est.id,
+                "nombre_completo": est.nombre_completo,
+                "dni": est.dni,
+                "carrera": est.carrera,
+                "estado": est.estado,
+            }

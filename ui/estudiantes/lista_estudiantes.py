@@ -10,7 +10,7 @@ from PySide6.QtCore    import Qt, QTimer, Signal
 from PySide6.QtGui     import QColor, QIcon, QFont
 
 from services.estudiante_service import EstudianteService
-from utils.excel_importer        import ExcelImportDialog
+from utils.importar_estudiantes        import ExcelImportDialog
 
 
 class ListaEstudiantesWidget(QWidget):
@@ -37,7 +37,7 @@ class ListaEstudiantesWidget(QWidget):
         self._timer.setInterval(350)   # ms de espera antes de buscar
         self._timer.timeout.connect(self._ejecutar_busqueda)
 
-        self.setMinimumSize(1000, 620)
+
         self.setWindowTitle("Lista estudiantes")
         self.setWindowFlags(
             self.windowFlags() &

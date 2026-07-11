@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from services.reporte_service import ReporteService
-from utils.exportar_excel import ExportarExcel
+from utils.exportar_aptos import ExportarExcel
 from utils.exportar_pdf import ExportarPDF
 
 

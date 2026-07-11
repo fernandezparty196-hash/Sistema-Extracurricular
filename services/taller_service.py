@@ -493,27 +493,53 @@ class TallerService:
     # ══════════════════════════════════════════════════════════════
     # LISTAR SESIONES DE UN TALLER
     # ══════════════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════
     @staticmethod
     def listar_sesiones(taller_id: int) -> list[dict]:
+        """
+        Retorna todas las sesiones de un taller.
+        """
         try:
             with get_session() as session:
-                t = session.get(Taller, taller_id)
-                if not t:
+                taller = session.get(Taller, taller_id)
+
+                if not taller:
                     return []
-                return [
-                    {
-                        "id":            s.id,
-                        "numero":        s.numero_sesion,
-                        "fecha":         str(s.fecha),
-                        "hora_inicio":   s.hora_inicio.strftime("%H:%M"),
-                        "hora_fin":      s.hora_fin.strftime("%H:%M"),
-                        "estado":        s.estado,
+
+                sesiones = sorted(
+                    taller.sesiones,
+                    key=lambda s: (s.numero_sesion, s.fecha)
+                )
+
+                resultado = []
+
+                for s in sesiones:
+                    hora_inicio = (
+                        s.hora_inicio.strftime("%H:%M")
+                        if s.hora_inicio else "--:--"
+                    )
+
+                    hora_fin = (
+                        s.hora_fin.strftime("%H:%M")
+                        if s.hora_fin else "--:--"
+                    )
+
+                    resultado.append({
+                        "id": s.id,
+                        "numero": s.numero_sesion,
+                        "fecha": s.fecha.strftime("%d/%m/%Y"),
+                        "hora": f"{hora_inicio} - {hora_fin}",   # ← lo usa el Panel
+                        "hora_inicio": hora_inicio,
+                        "hora_fin": hora_fin,
+                        "estado": s.estado,
                         "observaciones": s.observaciones or "",
-                        "asistencias":   len(s.asistencias),
-                    }
-                    for s in t.sesiones
-                ]
-        except SQLAlchemyError:
+                        "asistencias": len(s.asistencias),
+                    })
+
+                return resultado
+
+        except SQLAlchemyError as e:
+            print(f"Error al listar sesiones: {e}")
             return []
 
     # ══════════════════════════════════════════════════════════════

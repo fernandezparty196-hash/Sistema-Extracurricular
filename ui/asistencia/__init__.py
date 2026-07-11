@@ -1,5 +1,5 @@
-from .registro_asistencia_dialog import RegistroAsistenciaDialog
+from .panel_registar_asistencia import PanelRegistrarAsistencia
 
 __all__ = [
-    "RegistroAsistenciaDialog",
+    "PanelRegistrarAsistencia",
 ]

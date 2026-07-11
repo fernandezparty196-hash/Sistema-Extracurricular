@@ -11,35 +11,50 @@ class ThemeManager:
 
     # COLORES POR TEMA
     LIGHT = {
-            "bg_principal": "#f8f7f4",
-            "bg_sidebar": "#ffffff",
-            "bg_card": "#ffffff",
-            "text_primary": "#1a1a1a",
-            "text_secondary": "#666666",
-            "text_light": "#999999",
-            "border": "#e0e0e0",
-            "primary": "#2563eb",
-            "primary_hover": "#1d4ed8",
-            "success": "#10b981",
-            "danger": "#ef4444",
-            "warning": "#f59e0b",
-            "info": "#3b82f6",
-        }
+        "bg_principal": "#F5F7FA",
+        "bg_sidebar": "#FFFFFF",
+        "bg_card": "#FFFFFF",
+
+        "text_primary": "#1F2937",
+        "text_secondary": "#6B7280",
+        "text_light": "#9CA3AF",
+
+        "border": "#D1D5DB",
+
+        # Azul institucional
+        "primary": "#1E3A5F",
+        "primary_hover": "#274C77",
+
+        "success": "#15803D",
+        "danger": "#B91C1C",
+        "warning": "#B45309",
+        "info": "#0369A1",
+
+        "TEMA_ICONO": "🌙"
+    }
+
+
     DARK = {
-            "bg_principal": "#0f172a",
-            "bg_sidebar": "#1e1d2e",
-            "bg_card": "#1a1a2e",
-            "text_primary": "#ffffff",
-            "text_secondary": "#d1d5db",
-            "text_light": "#9ca3af",
-            "border": "#374151",
-            "primary": "#3b82f6",
-            "primary_hover": "#2563eb",
-            "success": "#10b981",
-            "danger": "#ef4444",
-            "warning": "#f59e0b",
-            "info": "#60a5fa",
-        }
+        "bg_principal": "#111827",
+        "bg_sidebar": "#172033",
+        "bg_card": "#1F2937",
+
+        "text_primary": "#F9FAFB",
+        "text_secondary": "#D1D5DB",
+        "text_light": "#9CA3AF",
+
+        "border": "#374151",
+
+        "primary": "#60A5FA",
+        "primary_hover": "#3B82F6",
+
+        "success": "#22C55E",
+        "danger": "#EF4444",
+        "warning": "#F59E0B",
+        "info": "#38BDF8",
+
+        "TEMA_ICONO": "☀️"
+    }
     _tema_actual = "claro"
 
     @staticmethod
@@ -165,22 +180,22 @@ class ThemeManager:
 
         QPushButton {{
             background-color: {colores['primary']};
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 16px;
-            font-weight: bold;
-            min-height: 32px;
+            color:white;
+            border-radius:5px;
+            padding:9px 18px;
+            font-size:13px;
+            font-weight:600;
+            border:none;
         }}
+
 
         QPushButton:hover {{
-            background-color: {colores['primary_hover']};
+            background-color:{colores['primary_hover']};
         }}
 
+
         QPushButton:pressed {{
-            background-color: {colores['primary_hover']};
-            padding-top: 10px;
-            padding-bottom: 6px;
+            background-color:#142B45;
         }}
 
         QPushButton:disabled {{
@@ -256,6 +271,14 @@ class ThemeManager:
         /* DROPDOWNS / COMBOBOX                                         */
         /* ═══════════════════════════════════════════════════════════ */
 
+        QComboBox {{
+            background:white;
+            border:1px solid {colores['border']};
+            border-radius:6px;
+            padding:9px;
+            font-size:13px;
+        }}
+
         QComboBox::drop-down {{
             border: none;
             width: 20px;
@@ -264,6 +287,10 @@ class ThemeManager:
         QComboBox::down-arrow {{
             image: none;
             width: 0px;
+        }}
+
+        QComboBox:focus {{
+            border:2px solid {colores['primary']};
         }}
 
         QListView {{
@@ -367,7 +394,7 @@ class ThemeManager:
         QMenuBar {{
             background-color: {colores['bg_sidebar']};
             color: {colores['text_primary']};
-            border-bottom: 1px solid {colores['border']};
+            padding: 2px 4px;
         }}
 
         QMenuBar::item:selected {{
@@ -378,13 +405,17 @@ class ThemeManager:
         QMenu {{
             background-color: {colores['bg_card']};
             color: {colores['text_primary']};
-            border: 1px solid {colores['border']};
-            border-radius: 4px;
         }}
 
         QMenu::item:selected {{
             background-color: {colores['primary']};
             color: white;
+        }}
+
+        QMenu::separator {{
+            height: 1px;
+            background: {colores['border']};
+            margin: 4px 8px;
         }}
 
         /* ═══════════════════════════════════════════════════════════ */
@@ -436,6 +467,12 @@ class ThemeManager:
         QPushButton#btn_warning:hover {{
             background-color: #d97706;
         }}
+
+        QPushButton#btn_modulo {{
+            color: {colores['text_primary']};
+            background-color: transparent;
+        }}
+
 
         QLabel#titulo {{
             font-size: 18px;

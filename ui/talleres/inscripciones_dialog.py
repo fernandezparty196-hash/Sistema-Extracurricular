@@ -10,6 +10,7 @@ from PySide6.QtGui  import QColor, QFont
 
 from services.taller_service import TallerService
 from services.estudiante_service import EstudianteService
+from ui.talleres.inscripcion_masiva_dialog import InscripcionMasivaDialog
 
 
 class InscripcionesDialog(QDialog):
@@ -89,6 +90,14 @@ class InscripcionesDialog(QDialog):
         self.btn_inscribir.setFixedHeight(34)
         self.btn_inscribir.clicked.connect(self._abrir_dialogo_inscribir)
         pie.addWidget(self.btn_inscribir)
+
+        pie.addSpacing(6)
+
+        self.btn_inscripcion_masiva = QPushButton("📥 Importar desde Excel")
+        self.btn_inscripcion_masiva.setObjectName("btn_inscripcion_masiva")
+        self.btn_inscripcion_masiva.setFixedHeight(34)
+        self.btn_inscripcion_masiva.clicked.connect(self._abrir_dialogo_inscripcion_masiva)
+        pie.addWidget(self.btn_inscripcion_masiva)
 
         pie.addSpacing(6)
 
@@ -236,6 +245,17 @@ class InscripcionesDialog(QDialog):
     def _abrir_dialogo_inscribir(self):
         """Abre un diálogo para buscar e inscribir un estudiante."""
         dlg = _BuscadorEstudiantesDialog(
+            taller_id=self.taller_id,
+            sesion=self.sesion,
+            parent=self
+        )
+        if dlg.exec():
+            self._cargar_datos()
+            self.tab_inscripciones.setCurrentIndex(0)
+
+    def _abrir_dialogo_inscripcion_masiva(self):
+        """Abre el diálogo de inscripción masiva desde Excel."""
+        dlg = InscripcionMasivaDialog(
             taller_id=self.taller_id,
             sesion=self.sesion,
             parent=self

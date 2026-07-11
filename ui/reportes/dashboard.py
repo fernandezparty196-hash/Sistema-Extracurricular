@@ -11,7 +11,7 @@ CORRECCIONES:
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QColor
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,QHeaderView,
     QTableWidget, QTableWidgetItem, QMessageBox, QGridLayout,QSizePolicy
 )
 
@@ -154,6 +154,9 @@ class DashboardWidget(QWidget):
         self.tabla_sesiones.setColumnWidth(3, 200)
         self.tabla_sesiones.setMaximumHeight(250)
         self.tabla_sesiones.setSelectionBehavior(QTableWidget.SelectRows)
+
+        header = self.tabla_sesiones.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.tabla_sesiones)
 
         # ── SPACER FINAL ───────────────────────────────────────────
