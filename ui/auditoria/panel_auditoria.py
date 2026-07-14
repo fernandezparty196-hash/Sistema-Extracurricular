@@ -1,27 +1,3 @@
-"""
-ui/auditoria/panel_auditoria.py
-════════════════════════════════
-
-QWidget del módulo "Auditoría del Sistema".
-
-ARQUITECTURA:
-  Este widget NUNCA toca SQLAlchemy directamente. Toda consulta pasa
-  por AuditoriaService (services/auditoria_service.py), que retorna
-  un ResultadoAuditoria — igual patrón que el resto del sistema
-  (ResultadoAsistencia, ResultadoAuth, etc.).
-
-ACCESO:
-  Solo Administrador puede ver este módulo. Si otro rol llega aquí
-  (por ejemplo por una futura reorganización de MODULOS), se muestra
-  un mensaje de acceso restringido en lugar de la tabla.
-
-NOTA DE ESTILO:
-  Filtros en card con QGridLayout, y la tabla con su etiqueta de sección
-  directamente encima (sin card envolvente) — mismo patrón que usan
-  las tablas de ui/asistencia/panel_asistencia.py (label "etiqueta_seccion"
-  + tabla suelta, paginación como pie de página).
-"""
-
 from datetime import date, timedelta
 
 from PySide6.QtCore    import Qt, QDate
@@ -149,7 +125,6 @@ class PanelAuditoria(QWidget):
         # ── Botones ──────────────────────────────────────────────
         btn_buscar = QPushButton("Buscar")
         btn_buscar.clicked.connect(self._buscar)
-        layout.addSpacing(6)
 
         btn_limpiar = QPushButton("Limpiar filtros")
         btn_limpiar.setObjectName("btn_ghost")

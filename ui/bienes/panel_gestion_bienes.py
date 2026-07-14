@@ -1,33 +1,3 @@
-"""
-ui/panel_bienes.py   ──   EP-06 Gestión de Bienes Patrimoniales
-═════════════════════════════════════════════════════════════
-
-Panel principal para RF-31 a RF-35 + CRUD de bienes.
-
-  RF-31: Lista de bienes con filtros (código, descripción, categoría, estado).
-  CRUD:  Crear bien nuevo y editar datos generales (usa registrar()/editar()
-         del servicio). No existe "eliminar" físico: la baja de un bien es
-         un estado del dominio (DeBaja), manejado por RF-34.
-  RF-33: Registrar devolución indicando estado de conservación
-         (Excelente/Bueno/Regular/Malo/Inservible).
-  RF-34: Cambiar estado manualmente (Disponible ↔ Mantenimiento, o baja
-         de emergencia a DeBaja). "Asignado" solo se alcanza vía el
-         flujo de asignación real.
-  RF-35: Alertas visuales por fila:
-         ⏰ Vencido       → asignación activa con fecha de devolución superada
-         💔 Dañado        → última devolución con conservación Regular/Malo/Inservible
-         🔧 Mantenimiento → bien actualmente en Mantenimiento
-
-REGLAS DE ARQUITECTURA (proyecto):
-  • Este widget NUNCA accede a la base de datos ni al ORM directamente.
-  • Toda operación pasa por BienesService, que retorna ResultadoBien.
-  • Los diálogos heredan de QDialog (no QWidget) para que exec() funcione.
-  • No se usa QSS inline "duro": los colores de alerta son datos de
-    estado (como el preview verde/rojo de la importación de Excel), no
-    tema visual, así que se aplican vía QColor sobre el QTableWidgetItem.
-    El resto de widgets usa objectName() para engancharse a main.qss.
-"""
-
 from datetime import datetime, date
 
 from PySide6.QtCore import Qt, Signal, QDate

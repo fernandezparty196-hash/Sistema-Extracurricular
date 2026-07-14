@@ -1,35 +1,6 @@
 """
 services/usuario_service.py   ──   Gestión de Usuarios
 ════════════════════════════════════════════════════════════
-
-Módulo para gestionar usuarios del sistema.
-Compatible 100% con tu estructura: auth_service.py, modelos, etc.
-
-¿QUÉ HACE?
-  • CRUD: Crear, leer, actualizar, eliminar usuarios
-  • Validaciones: email único, username único, password seguro
-  • Roles: asignar y cambiar roles de usuarios
-  • Auditoría: registra cada cambio en tabla auditoria
-  • Activación/Desactivación: sin eliminar, mantiene histórico
-
-¿CUÁNDO SE USA?
-  • Panel admin → Gestión de usuarios
-  • Cambio de perfil personal
-  • Cuando necesitas modificar datos de usuario desde UI
-
-PATRÓN (igual que auth_service.py):
-  1. Validar entrada
-  2. Buscar en BD
-  3. Hacer cambio
-  4. Auditar
-  5. Retornar resultado
-
-RETORNA siempre: ResultadoUsuario
-  - ok: True/False
-  - mensaje: explicación en español
-  - usuario: objeto Usuario si aplica
-  - lista: lista de usuarios si aplica
-  - datos: dict con info extra
 """
 
 from dataclasses import dataclass

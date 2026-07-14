@@ -17,7 +17,7 @@ from ui.talleres import ListaTalleresWidget
 from ui.asistencia import PanelRegistrarAsistencia
 from ui.reportes import DashboardWidget
 from ui.reportes.reporte_sesion_dialog import ReporteAsistenciaDialog
-from ui.reportes.reportes_principal_dialog import ReportesPrincipalDialog
+from ui.reportes.reportes_principal_dialog import PanelReportes
 from ui.lista_aptos.lista_aptos_widget import ListaAptosWidget
 from ui.usuarios.panel_gestionar_usuarios import PanelGestionarUsuarios
 from ui.docentes.panel_gestionar_docentes import PanelGestionarDocentes
@@ -39,7 +39,7 @@ MODULOS = [
     ("Asistencia",     "📋", ["Administrador", "Docente"],             PanelRegistrarAsistencia),
     ("Lista de Aptos", "✅", ["Administrador"],                        ListaAptosWidget),
     ("Bienes",         "📦", ["Administrador", "Operador"],            PanelBienesPatrimoniales),
-    ("Reportes",       "📊", ["Administrador"],                        ReportesPrincipalDialog),
+    ("Reportes",       "📊", ["Administrador"],                        PanelReportes),
     ("Auditoría",      "🕵️", ["Administrador"],                        PanelAuditoria),
 ]
 

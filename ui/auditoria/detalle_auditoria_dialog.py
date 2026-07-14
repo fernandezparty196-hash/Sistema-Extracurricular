@@ -1,13 +1,3 @@
-"""
-ui/auditoria/detalle_auditoria_dialog.py
-═══════════════════════════════════════
-
-Muestra el detalle completo de un registro de auditoría:
-metadatos (fecha, usuario, tabla, acción, IP) y una comparación
-lado a lado de "datos anteriores" vs "datos nuevos" en formato JSON
-legible.
-"""
-
 import json
 
 from PySide6.QtCore    import Qt

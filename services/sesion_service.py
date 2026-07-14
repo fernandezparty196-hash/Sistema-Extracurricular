@@ -1,7 +1,4 @@
-# services/sesion_service.py
-
 from datetime import datetime
-
 from sqlalchemy.exc import SQLAlchemyError
 
 from database.connection import get_session

@@ -1,8 +1,6 @@
 """
-services/lista_aptos_service.py   ──   EP-05 Lista de Aptos (CORREGIDO)
+services/lista_aptos_service.py   ──   EP-05 Lista de Aptos 
 ═════════════════════════════════════════════════════════════════
-
-FIX: Cambié "GENERATE" a "INSERT" (valores válidos en ENUM)
 """
 
 from dataclasses import dataclass
