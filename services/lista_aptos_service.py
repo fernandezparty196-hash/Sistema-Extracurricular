@@ -291,8 +291,8 @@ class ListaAptosService:
                     datos={
                         "taller_nombre": taller.nombre,
                         "taller_codigo": taller.codigo,
-                        "docente": taller.docente.nombre_completo if taller.docente else "N/A",
-                        "ciclo": taller.ciclo_academico.nombre if taller.ciclo_academico else "N/A",
+                        "ciclo":         taller.ciclo_academico.nombre,
+                        "docente":       taller.docente.nombre_completo,
                         "fecha_generacion": datetime.now().strftime("%d/%m/%Y %H:%M"),
                         "umbral": taller.umbral_asistencia,
                     },

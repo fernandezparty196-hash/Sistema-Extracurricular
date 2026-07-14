@@ -70,7 +70,7 @@ class ReporteService:
                         "nombre": e.nombre_completo,
                         "email": e.email,
                         "carrera": e.carrera.nombre if e.carrera else "N/A",
-                        "ciclo": e.ciclo_actual 
+                        "ciclo": e.ciclo_actual
                     }
                     for e in estudiantes
                 ]

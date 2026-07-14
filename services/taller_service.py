@@ -671,3 +671,22 @@ class TallerService:
                 ]
         except SQLAlchemyError:
             return []
+
+    @staticmethod
+    def listar_activos() -> list[dict]:
+        try:
+            with get_session() as session:
+
+                talleres = (session.query(Taller).filter(Taller.estado == "Activo").order_by(Taller.nombre).all())
+                return [
+                    {
+                        "id": t.id,
+                        "codigo": t.codigo,
+                        "nombre": t.nombre,
+                        "docente": t.docente.nombre_completo if t.docente else "",
+                    }
+                    for t in talleres
+                ]
+
+        except SQLAlchemyError:
+            return []

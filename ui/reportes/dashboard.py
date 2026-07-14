@@ -11,7 +11,7 @@ CORRECCIONES:
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QColor
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,QHeaderView,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,QHeaderView,QAbstractItemView,
     QTableWidget, QTableWidgetItem, QMessageBox, QGridLayout,QSizePolicy
 )
 
@@ -71,15 +71,10 @@ class DashboardWidget(QWidget):
     def _construir_ui(self) -> None:
         """Construye la interfaz del dashboard."""
         layout = QVBoxLayout()
-        layout.setSpacing(20)
         layout.setContentsMargins(25, 25, 25, 25)
 
         # ── ENCABEZADO ─────────────────────────────────────────────
         header_layout = QHBoxLayout()
-
-        titulo = QLabel("📊 Dashboard")
-        titulo.setObjectName("titulo")
-        header_layout.addWidget(titulo)
 
         self.label_bienvenida = QLabel()
         self.label_bienvenida.setObjectName("bienvenida")
@@ -157,6 +152,16 @@ class DashboardWidget(QWidget):
 
         header = self.tabla_sesiones.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        
+        self.tabla_sesiones.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.tabla_sesiones.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.tabla_sesiones.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.tabla_sesiones.setAlternatingRowColors(True)
+        self.tabla_sesiones.verticalHeader().setVisible(False)
+        self.tabla_sesiones.setShowGrid(False)
+        self.tabla_sesiones.setSortingEnabled(True)
+        self.tabla_sesiones.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+    
         layout.addWidget(self.tabla_sesiones)
 
         # ── SPACER FINAL ───────────────────────────────────────────

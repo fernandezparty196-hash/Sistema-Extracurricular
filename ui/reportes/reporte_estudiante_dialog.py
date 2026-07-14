@@ -137,10 +137,6 @@ class ReporteEstudianteDialog(QDialog):
     def _crear_panel_filtros(self) -> QFrame:
         """Crea el panel de filtros."""
         panel = QFrame()
-        panel.setStyleSheet("""
-            QFrame { background-color: #f5f5f5; border-radius: 6px; padding: 10px; }
-        """)
-        
         layout = QVBoxLayout(panel)
         
         # Primera fila de filtros

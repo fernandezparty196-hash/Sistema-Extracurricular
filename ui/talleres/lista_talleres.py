@@ -50,7 +50,7 @@ class ListaTalleresWidget(QWidget):
     """
 
     COLUMNAS = [
-        (0, "Código",      90),
+        (0, "Código",     130),
         (1, "Nombre",     190),
         (2, "Docente",    160),
         (3, "Ciclo",      110),
@@ -74,8 +74,8 @@ class ListaTalleresWidget(QWidget):
     # ──────────────────────────────────────────────────────────────
     def _construir_ui(self):
         raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(24, 20, 24, 16)
-        raiz.setSpacing(0)
+        raiz.setContentsMargins(0,0,0,12)
+        raiz.setSpacing(2)
 
         raiz.addLayout(self._cabecera())
         raiz.addSpacing(14)
@@ -91,12 +91,6 @@ class ListaTalleresWidget(QWidget):
 
     def _cabecera(self) -> QHBoxLayout:
         lay = QHBoxLayout()
-
-        lbl = QLabel("Talleres")
-        lbl.setObjectName("lbl_titulo_modulo")
-        f = QFont(); f.setPointSize(20); f.setWeight(QFont.Weight.Bold)
-        lbl.setFont(f)
-        lay.addWidget(lbl)
         lay.addStretch()
 
         self.btn_nuevo = QPushButton("+ Nuevo taller")
@@ -190,7 +184,6 @@ class ListaTalleresWidget(QWidget):
         ]:
             btn = QPushButton(nombre)
             btn.setObjectName(attr)
-            btn.setFixedHeight(34)
             btn.setEnabled(False)
             btn.clicked.connect(slot)
             setattr(self, attr, btn)
@@ -202,7 +195,6 @@ class ListaTalleresWidget(QWidget):
         
         btn_exportar_celulares = QPushButton("📱 Exportar celulares")
         btn_exportar_celulares.setObjectName("btn_exportar_celulares")
-        btn_exportar_celulares.setFixedHeight(34)
         btn_exportar_celulares.setEnabled(False)
         btn_exportar_celulares.clicked.connect(self._exportar_celulares)
         self.btn_exportar_celulares = btn_exportar_celulares

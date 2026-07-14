@@ -70,20 +70,15 @@ class ReportesPrincipalDialog(QWidget):
     def _construir_ui(self) -> None:
         """Construye la interfaz del dialog."""
         layout = QVBoxLayout(self)
-        layout.setSpacing(20)
-        layout.setContentsMargins(30, 30, 30, 30)
-        
-        # ── TÍTULO ─────────────────────────────────────────────────
-        titulo = QLabel("📊 Centro de Reportes")
-        titulo.setObjectName("titulo")
-        layout.addWidget(titulo)
-        
+        layout.setContentsMargins(0,0,0,0)
+        layout.setSpacing(2)
+
         subtitulo = QLabel("Selecciona el tipo de reporte que deseas generar")
         subtitulo.setObjectName("subtitulo")
         layout.addWidget(subtitulo)
         
         layout.addSpacing(20)
-        
+    
         # ── OPCIONES DE REPORTES ───────────────────────────────────
         opciones_layout = QHBoxLayout()
         opciones_layout.setSpacing(20)

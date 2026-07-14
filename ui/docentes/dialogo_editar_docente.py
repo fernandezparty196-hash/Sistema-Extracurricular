@@ -62,64 +62,6 @@ class DialogoEditarDocente(QDialog):
         self.setMinimumSize(450, 380)
         self.setModal(True)
 
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #f8f7f4;
-            }
-            QLabel#titulo {
-                font-size: 14px;
-                font-weight: bold;
-                color: #1a1a1a;
-            }
-            QLabel#subtitulo {
-                font-size: 10px;
-                color: #888;
-            }
-            QLabel {
-                font-size: 10px;
-                color: #333;
-            }
-            QLineEdit {
-                background-color: white;
-                border: 1px solid #ddd;
-                border-radius: 3px;
-                padding: 5px;
-                font-size: 10px;
-                min-height: 28px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #2563eb;
-                background-color: #f9fbff;
-            }
-            QLineEdit:disabled {
-                background-color: #f0f0f0;
-                color: #999;
-            }
-            QPushButton {
-                background-color: #2563eb;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                padding: 6px 12px;
-                font-weight: bold;
-                font-size: 10px;
-                min-height: 28px;
-            }
-            QPushButton:hover {
-                background-color: #1d4ed8;
-            }
-            QPushButton#btnCancelar {
-                background-color: #6b7280;
-            }
-            QPushButton#btnCancelar:hover {
-                background-color: #4b5563;
-            }
-            QFrame#separador {
-                background-color: #eee;
-                height: 1px;
-            }
-        """)
-
     def _cargar_docente(self) -> None:
         """Carga los datos del docente."""
         resultado = DocenteService.obtener_por_id(self.docente_id)

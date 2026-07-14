@@ -9,10 +9,20 @@ FUNCIONALIDADES:
   • Asignación de bienes a espacios
   • Seguimiento de estado
   • Auditoría de movimientos
+
+CAMBIOS EN ESTA REVISIÓN:
+  • registrar(): se reordenó la validación para no acceder a claves
+    opcionales del dict antes de confirmar que existen (evitaba KeyError).
+  • listar(): ahora incluye datos necesarios para el panel de alertas
+    (RF-35): asignado_a, fecha_devolucion_esperada, alerta_vencido,
+    alerta_daniado, alerta_mantenimiento.
+  • cambiar_estado(): valida transiciones permitidas (RF-34) en lugar
+    de aceptar cualquier estado, evitando estados inconsistentes con
+    las asignaciones reales.
 """
 
 from dataclasses import dataclass
-from datetime import datetime,date
+from datetime import datetime, date
 from typing import Optional, List, Dict, Any
 
 from sqlalchemy import and_, func
@@ -28,6 +38,17 @@ class ResultadoBien:
     mensaje: str
     datos: Optional[Any] = None
     lista: Optional[List[Dict]] = None
+
+
+# Transiciones manuales permitidas para cambiar_estado().
+# "Asignado" NO se incluye aquí: solo se llega a ese estado a través
+# de BienesService.asignar(), que crea la AsignacionBien real.
+TRANSICIONES_MANUALES = {
+    "Disponible":    {"Mantenimiento", "DeBaja"},
+    "Mantenimiento": {"Disponible", "DeBaja"},
+    "Asignado":      {"DeBaja"},   # baja de emergencia con bien fuera
+    "DeBaja":        set(),        # estado final, sin retorno
+}
 
 
 class BienesService:
@@ -49,19 +70,8 @@ class BienesService:
           }
         """
 
-        if datos["valor_adquisicion"] <= 0:
-            return ResultadoBien(
-                ok=False,
-                mensaje="El valor de adquisición debe ser mayor que cero."
-            )
-        
-        if datos["fecha_adquisicion"] > date.today():
-
-            return ResultadoBien(
-                ok=False,
-                mensaje="La fecha de adquisición no puede ser posterior a la fecha actual."
-            )
-
+        # 1) Campos obligatorios primero, para no reventar con KeyError
+        #    al leer campos opcionales más abajo.
         obligatorios = ["codigo_patrimonial", "descripcion"]
         for campo in obligatorios:
             if not datos.get(campo):
@@ -69,6 +79,28 @@ class BienesService:
                     ok=False,
                     mensaje=f"El campo '{campo}' es obligatorio"
                 )
+
+        # 2) Validaciones de campos opcionales, solo si vienen presentes.
+        valor = datos.get("valor_adquisicion")
+        if valor not in (None, ""):
+            try:
+                if float(valor) <= 0:
+                    return ResultadoBien(
+                        ok=False,
+                        mensaje="El valor de adquisición debe ser mayor que cero."
+                    )
+            except (TypeError, ValueError):
+                return ResultadoBien(
+                    ok=False,
+                    mensaje="El valor de adquisición ingresado es inválido."
+                )
+
+        fecha_adq = datos.get("fecha_adquisicion")
+        if fecha_adq and fecha_adq > date.today():
+            return ResultadoBien(
+                ok=False,
+                mensaje="La fecha de adquisición no puede ser posterior a la fecha actual."
+            )
 
         try:
             with get_session() as session:
@@ -86,17 +118,16 @@ class BienesService:
                 bien = BienPatrimonial(
                     codigo_patrimonial=datos["codigo_patrimonial"].strip(),
                     descripcion=datos["descripcion"].strip(),
-                    categoria=datos.get("categoria", "").strip() or None,
-                    valor_adquisicion=float(datos["valor_adquisicion"]) if datos.get("valor_adquisicion") else None,
-                    fecha_adquisicion=datos.get("fecha_adquisicion"),
+                    categoria=(datos.get("categoria") or "").strip() or None,
+                    valor_adquisicion=float(valor) if valor not in (None, "") else None,
+                    fecha_adquisicion=fecha_adq,
                     estado="Disponible",
-                    observaciones=datos.get("observaciones", "").strip() or None
+                    observaciones=(datos.get("observaciones") or "").strip() or None
                 )
 
                 session.add(bien)
                 session.flush()
 
-                # Registrar auditoría
                 auditoria = Auditoria(
                     usuario_id=usuario_id,
                     tabla_afectada="bienes_patrimoniales",
@@ -123,12 +154,6 @@ class BienesService:
                 mensaje="Ya existe un bien con ese código patrimonial."
             )
 
-        except ValueError:
-            return ResultadoBien(
-                ok=False,
-                mensaje="El valor de adquisición ingresado es inválido."
-            )
-
         except SQLAlchemyError:
             return ResultadoBien(
                 ok=False,
@@ -149,10 +174,7 @@ class BienesService:
                 bien = session.query(BienPatrimonial).filter_by(id=bien_id).first()
 
                 if not bien:
-                    return ResultadoBien(
-                        ok=False,
-                        mensaje="Bien no encontrado"
-                    )
+                    return ResultadoBien(ok=False, mensaje="Bien no encontrado")
 
                 datos_anteriores = {
                     "descripcion": bien.descripcion,
@@ -161,20 +183,18 @@ class BienesService:
                     "observaciones": bien.observaciones
                 }
 
-                # Actualizar campos
                 if "descripcion" in datos:
                     bien.descripcion = datos["descripcion"].strip()
                 if "categoria" in datos:
-                    bien.categoria = datos["categoria"].strip() or None
+                    bien.categoria = (datos["categoria"] or "").strip() or None
                 if "valor_adquisicion" in datos:
                     bien.valor_adquisicion = float(datos["valor_adquisicion"]) if datos["valor_adquisicion"] else None
                 if "observaciones" in datos:
-                    bien.observaciones = datos["observaciones"].strip() or None
+                    bien.observaciones = (datos["observaciones"] or "").strip() or None
 
                 bien.updated_at = datetime.now()
                 session.commit()
 
-                # Registrar auditoría
                 auditoria = Auditoria(
                     usuario_id=usuario_id,
                     tabla_afectada="bienes_patrimoniales",
@@ -191,20 +211,23 @@ class BienesService:
                 session.add(auditoria)
                 session.commit()
 
-                return ResultadoBien(
-                    ok=True,
-                    mensaje="Bien actualizado exitosamente"
-                )
+                return ResultadoBien(ok=True, mensaje="Bien actualizado exitosamente")
 
         except Exception as e:
-            return ResultadoBien(
-                ok=False,
-                mensaje=f"Error: {str(e)}"
-            )
+            return ResultadoBien(ok=False, mensaje=f"Error: {str(e)}")
 
     @staticmethod
     def cambiar_estado(bien_id: int, nuevo_estado: str, usuario_id: int) -> ResultadoBien:
-        """Cambia el estado de un bien."""
+        """
+        Cambia el estado de un bien (RF-34), respetando transiciones válidas:
+          Disponible   → Mantenimiento, DeBaja
+          Mantenimiento→ Disponible, DeBaja
+          Asignado     → DeBaja (baja de emergencia; requiere confirmación en UI)
+          DeBaja       → (sin salida, estado final)
+
+        Para pasar a "Asignado" se debe usar asignar(), que crea la
+        AsignacionBien correspondiente.
+        """
         estados_validos = ["Disponible", "Asignado", "Mantenimiento", "DeBaja"]
 
         if nuevo_estado not in estados_validos:
@@ -218,12 +241,25 @@ class BienesService:
                 bien = session.query(BienPatrimonial).filter_by(id=bien_id).first()
 
                 if not bien:
-                    return ResultadoBien(
-                        ok=False,
-                        mensaje="Bien no encontrado"
-                    )
+                    return ResultadoBien(ok=False, mensaje="Bien no encontrado")
 
                 estado_anterior = bien.estado
+
+                if estado_anterior == nuevo_estado:
+                    return ResultadoBien(ok=False, mensaje="El bien ya se encuentra en ese estado")
+
+                permitidos = TRANSICIONES_MANUALES.get(estado_anterior, set())
+                if nuevo_estado not in permitidos:
+                    if nuevo_estado == "Asignado":
+                        return ResultadoBien(
+                            ok=False,
+                            mensaje="No se puede asignar manualmente. Use la opción 'Asignar bien'."
+                        )
+                    return ResultadoBien(
+                        ok=False,
+                        mensaje=f"Transición no permitida: {estado_anterior} → {nuevo_estado}"
+                    )
+
                 bien.estado = nuevo_estado
                 bien.updated_at = datetime.now()
                 session.commit()
@@ -239,16 +275,10 @@ class BienesService:
                 session.add(auditoria)
                 session.commit()
 
-                return ResultadoBien(
-                    ok=True,
-                    mensaje=f"Estado cambiado a {nuevo_estado}"
-                )
+                return ResultadoBien(ok=True, mensaje=f"Estado cambiado a {nuevo_estado}")
 
         except Exception as e:
-            return ResultadoBien(
-                ok=False,
-                mensaje=f"Error: {str(e)}"
-            )
+            return ResultadoBien(ok=False, mensaje=f"Error: {str(e)}")
 
     @staticmethod
     def asignar(
@@ -259,26 +289,13 @@ class BienesService:
         observaciones: str = None,
         usuario_id: int = None
     ) -> ResultadoBien:
-        """
-        Asigna un bien a docente y/o taller.
-        
-        PARÁMETROS:
-            bien_id: ID del bien
-            docente_id: ID del docente (opcional)
-            taller_id: ID del taller (opcional)
-            fecha_devolucion: Fecha esperada de devolución
-            observaciones: Observaciones de la asignación
-            usuario_id: Usuario que realiza la asignación
-        """
+        """Asigna un bien a docente y/o taller."""
         try:
             with get_session() as session:
                 bien = session.query(BienPatrimonial).filter_by(id=bien_id).first()
 
                 if not bien:
-                    return ResultadoBien(
-                        ok=False,
-                        mensaje="Bien no encontrado"
-                    )
+                    return ResultadoBien(ok=False, mensaje="Bien no encontrado")
 
                 if not bien.esta_disponible:
                     return ResultadoBien(
@@ -323,10 +340,7 @@ class BienesService:
                 )
 
         except Exception as e:
-            return ResultadoBien(
-                ok=False,
-                mensaje=f"Error: {str(e)}"
-            )
+            return ResultadoBien(ok=False, mensaje=f"Error: {str(e)}")
 
     @staticmethod
     def devolver(
@@ -335,18 +349,16 @@ class BienesService:
         observaciones_devolucion: str = None,
         usuario_id: int = None
     ) -> ResultadoBien:
-        """
-        Registra la devolución de un bien.
-        
-        PARÁMETROS:
-            asignacion_id: ID de la asignación
-            estado_conservacion: Estado en que se devuelve
-            observaciones_devolucion: Observaciones
-            usuario_id: Usuario que recibe la devolución
-        """
+        """Registra la devolución de un bien (RF-33)."""
         estados_validos = ["Excelente", "Bueno", "Regular", "Malo", "Inservible"]
-        
-        if estado_conservacion and estado_conservacion not in estados_validos:
+
+        if not estado_conservacion:
+            return ResultadoBien(
+                ok=False,
+                mensaje="Debe indicar el estado de conservación en que se devuelve el bien."
+            )
+
+        if estado_conservacion not in estados_validos:
             return ResultadoBien(
                 ok=False,
                 mensaje=f"Estado de conservación inválido. Válidos: {', '.join(estados_validos)}"
@@ -357,16 +369,10 @@ class BienesService:
                 asignacion = session.query(AsignacionBien).filter_by(id=asignacion_id).first()
 
                 if not asignacion:
-                    return ResultadoBien(
-                        ok=False,
-                        mensaje="Asignación no encontrada"
-                    )
+                    return ResultadoBien(ok=False, mensaje="Asignación no encontrada")
 
                 if asignacion.estado_asignacion != "Activo":
-                    return ResultadoBien(
-                        ok=False,
-                        mensaje="Esta asignación ya fue devuelta"
-                    )
+                    return ResultadoBien(ok=False, mensaje="Esta asignación ya fue devuelta")
 
                 asignacion.fecha_devolucion_real = date.today()
                 asignacion.estado_conservacion = estado_conservacion
@@ -375,7 +381,9 @@ class BienesService:
                 asignacion.updated_at = datetime.now()
 
                 bien = asignacion.bien
-                bien.estado = "Disponible"
+                # Si vuelve dañado en estado Malo/Inservible, se recomienda
+                # mantenimiento en vez de disponible directo.
+                bien.estado = "Mantenimiento" if estado_conservacion in ("Malo", "Inservible") else "Disponible"
 
                 session.commit()
 
@@ -388,26 +396,36 @@ class BienesService:
                     datos_nuevos={
                         "estado_asignacion": "Devuelto",
                         "fecha_devolucion_real": str(date.today()),
-                        "estado_conservacion": estado_conservacion
+                        "estado_conservacion": estado_conservacion,
+                        "estado_bien_resultante": bien.estado
                     }
                 )
                 session.add(auditoria)
                 session.commit()
 
-                return ResultadoBien(
-                    ok=True,
-                    mensaje="Bien devuelto exitosamente"
-                )
+                mensaje = "Bien devuelto exitosamente"
+                if bien.estado == "Mantenimiento":
+                    mensaje += " y enviado a Mantenimiento por su estado de conservación"
+
+                return ResultadoBien(ok=True, mensaje=mensaje)
 
         except Exception as e:
-            return ResultadoBien(
-                ok=False,
-                mensaje=f"Error: {str(e)}"
-            )
+            return ResultadoBien(ok=False, mensaje=f"Error: {str(e)}")
 
     @staticmethod
     def listar(filtro: dict = None) -> ResultadoBien:
-        """Lista bienes con filtros opcionales."""
+        """
+        Lista bienes con filtros opcionales.
+
+        Incluye, para cada bien, los datos necesarios para pintar
+        alertas visuales en el panel (RF-35) sin que la UI tenga que
+        tocar el ORM directamente:
+          - asignado_a: nombre del docente o taller con la asignación activa
+          - fecha_devolucion_esperada: fecha comprometida de devolución
+          - alerta_vencido: True si la asignación activa está vencida
+          - alerta_daniado: True si la última devolución fue con daño
+          - alerta_mantenimiento: True si el bien está en Mantenimiento
+        """
         try:
             with get_session() as session:
                 query = session.query(BienPatrimonial)
@@ -430,18 +448,50 @@ class BienesService:
 
                 bienes = query.order_by(BienPatrimonial.codigo_patrimonial).all()
 
-                lista = [
-                    {
+                lista = []
+                for b in bienes:
+                    asignacion_activa = b.asignacion_activa
+
+                    asignado_a = None
+                    fecha_dev_esperada = None
+                    fecha_dev_esperada_iso = None
+                    vencido = False
+                    if asignacion_activa:
+                        if asignacion_activa.docente:
+                            asignado_a = asignacion_activa.docente.nombre_completo
+                        elif asignacion_activa.taller:
+                            asignado_a = asignacion_activa.taller.nombre
+                        if asignacion_activa.fecha_devolucion_esperada:
+                            fecha_dev_esperada = asignacion_activa.fecha_devolucion_esperada.strftime("%d/%m/%Y")
+                            fecha_dev_esperada_iso = asignacion_activa.fecha_devolucion_esperada.isoformat()
+                        vencido = asignacion_activa.esta_vencida
+
+                    # Última asignación devuelta, para detectar daño reciente.
+                    devueltas = [a for a in b.asignaciones if a.estado_asignacion == "Devuelto"]
+                    ultima_devuelta = None
+                    if devueltas:
+                        ultima_devuelta = max(
+                            devueltas,
+                            key=lambda a: a.fecha_devolucion_real or date.min
+                        )
+                    daniado = ultima_devuelta.devolucion_con_dano if ultima_devuelta else False
+
+                    lista.append({
                         "id": b.id,
                         "codigo_patrimonial": b.codigo_patrimonial,
                         "descripcion": b.descripcion,
                         "categoria": b.categoria or "Sin categoría",
                         "estado": b.estado,
                         "valor": f"S/. {float(b.valor_adquisicion):,.2f}" if b.valor_adquisicion else "N/A",
-                        "asignacion_activa": b.asignacion_activa is not None
-                    }
-                    for b in bienes
-                ]
+                        "asignacion_activa": asignacion_activa is not None,
+                        "asignacion_activa_id": asignacion_activa.id if asignacion_activa else None,
+                        "asignado_a": asignado_a,
+                        "fecha_devolucion_esperada": fecha_dev_esperada,
+                        "fecha_devolucion_esperada_iso": fecha_dev_esperada_iso,
+                        "alerta_vencido": vencido,
+                        "alerta_daniado": daniado,
+                        "alerta_mantenimiento": b.estado == "Mantenimiento",
+                    })
 
                 return ResultadoBien(
                     ok=True,
@@ -450,10 +500,7 @@ class BienesService:
                 )
 
         except Exception as e:
-            return ResultadoBien(
-                ok=False,
-                mensaje=f"Error: {str(e)}"
-            )
+            return ResultadoBien(ok=False, mensaje=f"Error: {str(e)}")
 
     @staticmethod
     def obtener_por_id(bien_id: int) -> ResultadoBien:
@@ -463,10 +510,7 @@ class BienesService:
                 bien = session.query(BienPatrimonial).filter_by(id=bien_id).first()
 
                 if not bien:
-                    return ResultadoBien(
-                        ok=False,
-                        mensaje="Bien no encontrado"
-                    )
+                    return ResultadoBien(ok=False, mensaje="Bien no encontrado")
 
                 datos = {
                     "id": bien.id,
@@ -481,17 +525,10 @@ class BienesService:
                     "created_at": bien.created_at.strftime("%d/%m/%Y") if bien.created_at else "",
                 }
 
-                return ResultadoBien(
-                    ok=True,
-                    mensaje="Bien obtenido",
-                    datos=datos
-                )
+                return ResultadoBien(ok=True, mensaje="Bien obtenido", datos=datos)
 
         except Exception as e:
-            return ResultadoBien(
-                ok=False,
-                mensaje=f"Error: {str(e)}"
-            )
+            return ResultadoBien(ok=False, mensaje=f"Error: {str(e)}")
 
     @staticmethod
     def obtener_asignaciones(bien_id: int) -> ResultadoBien:
@@ -511,17 +548,10 @@ class BienesService:
                         "estado": a.estado_asignacion,
                         "conservacion": a.estado_conservacion or "N/A"
                     }
-                    for a in asignaciones
+                    for a in sorted(asignaciones, key=lambda x: x.created_at or datetime.min, reverse=True)
                 ]
 
-                return ResultadoBien(
-                    ok=True,
-                    mensaje="Asignaciones obtenidas",
-                    lista=lista
-                )
+                return ResultadoBien(ok=True, mensaje="Asignaciones obtenidas", lista=lista)
 
         except Exception as e:
-            return ResultadoBien(
-                ok=False,
-                mensaje=f"Error: {str(e)}"
-            )
+            return ResultadoBien(ok=False, mensaje=f"Error: {str(e)}")

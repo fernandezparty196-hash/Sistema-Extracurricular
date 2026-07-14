@@ -37,13 +37,6 @@ class ListaEstudiantesWidget(QWidget):
         self._timer.setInterval(350)   # ms de espera antes de buscar
         self._timer.timeout.connect(self._ejecutar_busqueda)
 
-
-        self.setWindowTitle("Lista estudiantes")
-        self.setWindowFlags(
-            self.windowFlags() &
-            ~Qt.WindowType.WindowContextHelpButtonHint
-        )
-
         self._construir_ui()
         self._cargar_combos()
         self._ejecutar_busqueda()   # carga inicial
@@ -53,7 +46,7 @@ class ListaEstudiantesWidget(QWidget):
     # ──────────────────────────────────────────────────────────────
     def _construir_ui(self):
         raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(24, 20, 24, 16)
+        raiz.setContentsMargins(0,0,0,12)
         raiz.setSpacing(0)
 
         # ── Cabecera: título + botones de acción ──────────────────
@@ -74,17 +67,11 @@ class ListaEstudiantesWidget(QWidget):
         raiz.addLayout(self._pie())
 
     # ── Cabecera ─────────────────────────────────────────────────
-    def _cabecera(self) -> QHBoxLayout:
+    def _cabecera(self):
         lay = QHBoxLayout()
-
-        lbl = QLabel("Estudiantes")
-        lbl.setObjectName("lbl_titulo_modulo")
-        font = QFont()
-        font.setPointSize(20)
-        font.setWeight(QFont.Weight.Bold)
-        lbl.setFont(font)
-        lay.addWidget(lbl)
-        lay.addStretch()
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(2)
+        lay.addStretch(2)
 
         # Botón importar Excel
         self.btn_importar = QPushButton("↑  Importar Excel")
@@ -112,9 +99,9 @@ class ListaEstudiantesWidget(QWidget):
         return lay
 
     # ── Barra de filtros ─────────────────────────────────────────
-    def _barra_filtros(self) -> QFrame:
+    def _barra_filtros(self):
         frame = QFrame()
-        frame.setObjectName("frame_filtros")
+        frame.setObjectName("frame")
 
         lay = QHBoxLayout(frame)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -205,7 +192,6 @@ class ListaEstudiantesWidget(QWidget):
         # Botón cambiar estado (desactivar / egresar)
         self.btn_cambiar_estado = QPushButton("Cambiar estado")
         self.btn_cambiar_estado.setObjectName("btn_cambiar_estado")
-        self.btn_cambiar_estado.setFixedHeight(34)
         self.btn_cambiar_estado.setEnabled(False)
         self.btn_cambiar_estado.clicked.connect(self._cambiar_estado)
         lay.addWidget(self.btn_cambiar_estado)
@@ -215,7 +201,6 @@ class ListaEstudiantesWidget(QWidget):
         # Botón historial
         self.btn_historial = QPushButton("Historial")
         self.btn_historial.setObjectName("btn_historial")
-        self.btn_historial.setFixedHeight(34)
         self.btn_historial.setEnabled(False)
         self.btn_historial.clicked.connect(self._abrir_historial)
         lay.addWidget(self.btn_historial)
@@ -225,7 +210,6 @@ class ListaEstudiantesWidget(QWidget):
         # Botón editar
         self.btn_editar = QPushButton("✎  Editar")
         self.btn_editar.setObjectName("btn_editar")
-        self.btn_editar.setFixedHeight(34)
         self.btn_editar.setEnabled(False)
         self.btn_editar.clicked.connect(self._abrir_formulario_editar)
         lay.addWidget(self.btn_editar)

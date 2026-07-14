@@ -29,7 +29,7 @@ from PySide6.QtGui import QFont, QColor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
     QTableWidgetItem, QPushButton, QLineEdit, QComboBox,
-    QLabel, QMessageBox, QHeaderView, QFrame
+    QLabel, QMessageBox, QHeaderView, QFrame,QAbstractItemView
 )
 
 from services.usuario_service import UsuarioService
@@ -54,13 +54,9 @@ class PanelGestionarUsuarios(QWidget):
     def _construir_ui(self) -> None:
         """Construye la interfaz."""
         layout = QVBoxLayout()
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(2)
+        layout.setContentsMargins(0,0,0,0)
 
-        # ── TÍTULO ───────────────────────────────────────────────
-        titulo = QLabel("Gestión de Usuarios")
-        titulo.setObjectName("titulo")
-        layout.addWidget(titulo)
 
         # ── BARRA DE HERRAMIENTAS ────────────────────────────────
         toolbar_layout = QHBoxLayout()
@@ -103,7 +99,8 @@ class PanelGestionarUsuarios(QWidget):
 
         toolbar_layout.addStretch()
         layout.addLayout(toolbar_layout)
-
+        layout.addSpacing(10)
+        
         # ── TABLA DE USUARIOS ────────────────────────────────────
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(7)
@@ -121,9 +118,15 @@ class PanelGestionarUsuarios(QWidget):
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Estado
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # Acciones
 
-        self.tabla.setMinimumHeight(400)
-        self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
-        self.tabla.setSelectionMode(QTableWidget.SingleSelection)
+        self.tabla.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.tabla.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.tabla.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.tabla.setAlternatingRowColors(True)
+        self.tabla.verticalHeader().setVisible(False)
+        self.tabla.setShowGrid(False)
+        self.tabla.setSortingEnabled(True)
+        self.tabla.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+    
         self.tabla.itemSelectionChanged.connect(self._on_seleccionar_usuario)
 
         layout.addWidget(self.tabla)

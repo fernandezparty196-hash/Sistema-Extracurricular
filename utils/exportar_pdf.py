@@ -137,7 +137,7 @@ class ExportarPDF:
                         "APTO"
                     ])
 
-                tabla_aptos = Table(tabla_data, colWidths=[1.8*inch, 0.9*inch, 1*inch, 1.5*inch, 0.8*inch, 0.7*inch])
+                tabla_aptos = Table(tabla_data, colWidths=[2.5*inch, 0.9*inch, 1*inch, 1.5*inch, 0.8*inch, 0.7*inch])
                 tabla_aptos.setStyle(TableStyle([
                     ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#534AB7')),
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),

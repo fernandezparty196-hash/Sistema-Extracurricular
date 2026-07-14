@@ -35,9 +35,9 @@ class PanelGestionarDocentes(QWidget):
         self._cargar_docentes()
 
     
-    def _construir_ui(self) -> None:
+    def _construir_ui(self):
         raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(24,20,24,16)
+        raiz.setContentsMargins(0,0,0,0)
         raiz.setSpacing(0)
 
         raiz.addLayout(self._cabecera())
@@ -54,16 +54,9 @@ class PanelGestionarDocentes(QWidget):
 
     def _cabecera(self):
         lay = QHBoxLayout()
-
-        lbl = QLabel("Docentes")
-        lbl.setObjectName("lbl_titulo_modulo")
-        font = QFont()
-        font.setPointSize(20)
-        font.setWeight(QFont.Weight.Bold)
-        lbl.setFont(font)
-        lay.addWidget(lbl)
-        lay.addStretch()
-
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(2)
+        lay.addStretch(2)
 
         self.btn_importar = QPushButton("↑ Importar Excel")
         self.btn_importar.setFixedHeight(36)
@@ -89,7 +82,7 @@ class PanelGestionarDocentes(QWidget):
     def _barra_busqueda(self):
         frame = QFrame()
         lay = QHBoxLayout(frame)
-        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setContentsMargins(0, 0, 0, 12)
         lay.setSpacing(8)
 
         self.inp_buscar = QLineEdit()
@@ -124,6 +117,7 @@ class PanelGestionarDocentes(QWidget):
         tabla.verticalHeader().setVisible(False)
         tabla.setShowGrid(False)
         tabla.setSortingEnabled(True)
+        tabla.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         tabla.itemSelectionChanged.connect(self._on_seleccionar_docente)
         tabla.doubleClicked.connect(self._abrir_editar_docente) 
         tabla.verticalHeader().setDefaultSectionSize(38)
@@ -150,21 +144,25 @@ class PanelGestionarDocentes(QWidget):
         self.btn_editar.clicked.connect(self._abrir_editar_docente)
         self.btn_editar.setEnabled(False)
         lay.addWidget(self.btn_editar)
+        lay.addSpacing(8)
 
         self.btn_vincular = QPushButton("🔗 Vincular")
         self.btn_vincular.clicked.connect(self._vincular_usuario)
         self.btn_vincular.setEnabled(False)
         lay.addWidget(self.btn_vincular)
+        lay.addSpacing(8)
 
         self.btn_desvincular = QPushButton("🔗 Desvincular")
         self.btn_desvincular.clicked.connect(self._desvincular_usuario)
         self.btn_desvincular.setEnabled(False)
         lay.addWidget(self.btn_desvincular)
+        lay.addSpacing(8)
 
         self.btn_cambiar_estado = QPushButton("Cambiar estado")
         self.btn_cambiar_estado.clicked.connect(self._cambiar_estado)
         self.btn_cambiar_estado.setEnabled(False)
         lay.addWidget(self.btn_cambiar_estado)
+        lay.addSpacing(8)
 
         self.btn_eliminar = QPushButton("🗑 Eliminar")
         self.btn_eliminar.clicked.connect(self._eliminar_docente)
@@ -186,6 +184,7 @@ class PanelGestionarDocentes(QWidget):
 
         # Guardar datos en caché
         self.docentes_datos = resultado.lista or []
+        self.tabla.setSortingEnabled(True)
         
         # Limpiar selección
         self.docente_seleccionado_id = None

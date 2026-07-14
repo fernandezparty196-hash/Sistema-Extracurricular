@@ -40,16 +40,8 @@ class ListaAptosWidget(QWidget):
     def _construir_ui(self) -> None:
         """Construye toda la interfaz."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
-
-        # ── Título ────────────────────────────────────────────────
-        lbl_titulo = QLabel("Lista de Aptos")
-        font_titulo = QFont()
-        font_titulo.setPointSize(20)
-        font_titulo.setBold(True)
-        lbl_titulo.setFont(font_titulo)
-        layout.addWidget(lbl_titulo)
+        layout.setContentsMargins(0,0,0,0)
+        layout.setSpacing(2)
 
         # ── Panel de control ──────────────────────────────────────
         layout.addWidget(self._crear_panel_control())
