@@ -1,23 +1,8 @@
-"""
-utils/exportar_excel.py   ──   Exportación a Excel
-═════════════════════════════════════════════════
-
-Utilidades para exportar datos a archivos Excel (.xlsx).
-Requiere: pip install openpyxl
-
-USO:
-    from utils.exportar_excel import ExportarExcel
-    
-    ExportarExcel.lista_aptos(
-        datos=resultado.datos,
-        estudiantes=resultado.lista,
-        ruta="/ruta/al/archivo.xlsx"
-    )
-"""
-
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any
+from openpyxl.drawing.image import Image
+from services.configuracion_service import ConfiguracionService
 
 try:
     from openpyxl import Workbook
@@ -34,17 +19,6 @@ class ExportarExcel:
     @staticmethod
     def lista_aptos(datos: Dict, estudiantes: Dict[str, List], 
                     ruta: str = None) -> bool:
-        """
-        Exporta lista de aptos a Excel con formato profesional.
-        
-        PARÁMETROS:
-            datos: dict con información del taller
-            estudiantes: dict con "aptos" y "desaptos"
-            ruta: ruta de descarga (si None, usa Desktop)
-        
-        RETORNA:
-            bool: True si éxito
-        """
         if not OPENPYXL_AVAILABLE:
             print("❌ openpyxl no está instalado. Usa: pip install openpyxl")
             return False
@@ -55,14 +29,41 @@ class ExportarExcel:
             ws = wb.active
             ws.title = "Lista de Aptos"
 
+            try:
+                resultado = ConfiguracionService.obtener()
+
+                if resultado.ok:
+                    config = resultado.datos
+                    logo_ruta = config.get("logo_ruta")
+
+                    if logo_ruta:
+                        ruta_logo = ConfiguracionService.obtener_ruta_logo_absoluta(logo_ruta)
+
+                        if Path(ruta_logo).exists():
+                            logo = Image(ruta_logo)
+
+                            # Tamaño del logo
+                            logo.width = 90
+                            logo.height = 90
+
+                            # Posición
+                            ws.add_image(logo, "A1")
+
+            except Exception as e:
+                print(f"No se pudo cargar el logo: {e}")
+
+            ws.row_dimensions[1].height = 70
+            ws.row_dimensions[2].height = 25
+
             # ── Encabezado ───────────────────────────────────────────
-            ws['A1'] = "LISTA DE APTOS"
-            ws['A1'].font = Font(size=16, bold=True)
-            ws.merge_cells('A1:H1')
-            ws['A1'].alignment = Alignment(horizontal='center')
+            ws["C2"] = "LISTA DE APTOS"
+            ws["C2"].font = Font(size=18, bold=True)
+            ws["C2"].alignment = Alignment(horizontal="center")
+
+            ws.merge_cells("C2:G2")
 
             # Información del taller
-            row = 3
+            row = 6
             ws[f'A{row}'] = "Taller:"
             ws[f'B{row}'] = datos.get('taller_nombre', 'N/A')
             ws[f'B{row}'].font = Font(bold=True)
@@ -88,7 +89,7 @@ class ExportarExcel:
             ws[f'B{row}'] = datos.get('fecha_generacion', datetime.now().strftime("%d/%m/%Y"))
 
             # ── Tabla de datos ───────────────────────────────────────
-            row = 10
+            row = 13
             
             # Encabezados de tabla
             headers = ["Nombre", "DNI", "Código", "Carrera", "Asistencia", "Umbral", "Estado"]
@@ -145,7 +146,7 @@ class ExportarExcel:
                 ws.cell(row=row, column=6).value = f"{datos.get('umbral', 0)}%"
                 ws.cell(row=row, column=6).alignment = Alignment(horizontal='center')
                 
-                ws.cell(row=row, column=7).value = "DESAPTO"
+                ws.cell(row=row, column=7).value = "NO APTOS"
                 ws.cell(row=row, column=7).font = Font(bold=True, color="C0392B")
                 ws.cell(row=row, column=7).alignment = Alignment(horizontal='center')
                 
@@ -173,7 +174,7 @@ class ExportarExcel:
             
             row += 1
             ws.cell(row=row, column=1).value = f"Aptos: {len(aptos)}"
-            ws.cell(row=row, column=2).value = f"Desaptos: {len(desaptos)}"
+            ws.cell(row=row, column=2).value = f"No aptos: {len(desaptos)}"
             ws.cell(row=row, column=3).value = f"Total: {len(aptos) + len(desaptos)}"
 
             # ── Determinar ruta de guardado ──────────────────────────

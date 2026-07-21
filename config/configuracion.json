@@ -1,4 +1,5 @@
 {
     "nombre_institucion": "Universidad Nacional de Barranca",
-    "logo_ruta": "assets/logos/image-removebg-preview (2).png"
+    "logo_ruta": "assets/logos/image-removebg-preview (2).png",
+    "fondo_ruta": "assets/logos/fondo_ruta.png"
 }

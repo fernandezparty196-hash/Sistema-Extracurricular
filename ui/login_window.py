@@ -1,30 +1,200 @@
-"""
-ui/login_window.py
-
-Login redesigned:
-- Lado IZQUIERDO: Logo grande (imagen)
-- Lado DERECHO: Formulario de login
-- Logo y nombre DINÁMICOS desde configuracion.json
-"""
-
 from pathlib import Path
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap, QFont
+
+from PySide6.QtCore import (
+    Qt, QEvent, QPoint, QRectF, QPropertyAnimation, QEasingCurve, Property
+)
+from PySide6.QtGui import QPixmap, QFont, QPainterPath, QRegion, QPainter,QPainterPath 
 from PySide6.QtWidgets import (
-    QDialog, QHBoxLayout, QVBoxLayout, QLabel, QLineEdit,
-    QPushButton, QMessageBox, QApplication, QFrame, QWidget,
+    QDialog, QWidget, QFrame, QHBoxLayout, QVBoxLayout, QLabel, QLineEdit,
+    QPushButton, QMessageBox, QApplication, QStackedLayout,
+    QGraphicsDropShadowEffect, QSizePolicy
 )
 
 from services.auth_service import AuthService
 from services.configuracion_service import ConfiguracionService
 
 
+# ── Paleta institucional ─────────────────────────────────────────
+AZUL_INSTITUCIONAL = "#0f2440"
+AZUL_CLARO         = "#60A5FA"
+AZUL_OSCURO        = "#1D4ED8"
+GRIS_CLARO         = "#F5F7FA"
+GRIS_OSCURO        = "#374151"
+
+RADIO_TARJETA   = 20
+MARGEN_SOMBRA   = 28
+ANCHO_TARJETA   = 1000
+ALTO_TARJETA    = 550
+
+
+# ════════════════════════════════════════════════════════════════
+# Campo con ícono 
+# ════════════════════════════════════════════════════════════════
+class CampoLogin(QFrame):
+
+    def __init__(self, icono: str, placeholder: str, es_password: bool = False, parent=None):
+        super().__init__(parent)
+        self.setObjectName("campo_login")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        fila = QHBoxLayout()
+        fila.setContentsMargins(0, 0, 0, 0)
+        fila.setSpacing(10)
+
+        lbl_icono = QLabel(icono)
+        lbl_icono.setObjectName("icono_campo")
+        fila.addWidget(lbl_icono)
+
+        self.input = QLineEdit()
+        self.input.setObjectName("input_login")
+        self.input.setPlaceholderText(placeholder)
+        self.input.setMinimumHeight(34)
+        if es_password:
+            self.input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.input.installEventFilter(self)
+        fila.addWidget(self.input, 1)
+
+        self.btn_ojo = None
+        if es_password:
+            self.btn_ojo = QPushButton("👁")
+            self.btn_ojo.setObjectName("btn_ojo")
+            self.btn_ojo.setFixedSize(30, 30)
+            self.btn_ojo.setCheckable(True)
+            self.btn_ojo.setCursor(Qt.CursorShape.PointingHandCursor)
+            fila.addWidget(self.btn_ojo)
+
+        layout.addLayout(fila)
+
+    def texto(self) -> str:
+        return self.input.text()
+
+
+# ════════════════════════════════════════════════════════════════
+# Panel derecho: imagen "cover" + degradado + contenido institucional
+# ════════════════════════════════════════════════════════════════
+class PanelImagenInstitucional(QWidget):
+
+    def __init__(self, radio_esquinas: int, parent=None):
+        super().__init__(parent)
+        self._radio = radio_esquinas
+        self._pixmap_original = QPixmap()
+        self.setMinimumWidth(1)
+        self._construir_ui()
+
+    def _construir_ui(self) -> None:
+        stack = QStackedLayout(self)
+        stack.setStackingMode(QStackedLayout.StackingMode.StackAll)
+
+        self.lbl_imagen = QLabel()
+        self.lbl_imagen.setScaledContents(False)
+        stack.addWidget(self.lbl_imagen)
+
+        overlay = QWidget()
+        overlay.setObjectName("overlay_gradiente")
+        stack.addWidget(overlay)
+
+        capa = QWidget()
+        capa.setStyleSheet("background: transparent;")
+        layout_capa = QVBoxLayout(capa)
+        layout_capa.setContentsMargins(24, 20, 24, 40)
+
+        layout_capa.addStretch()
+
+        self.lbl_logo_institucional = QLabel()
+        self.lbl_logo_institucional.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_logo_institucional.setFixedHeight(80)
+        layout_capa.addWidget(self.lbl_logo_institucional)
+        layout_capa.addSpacing(18)
+
+        self.lbl_universidad = QLabel("UNIVERSIDAD NACIONAL DE BARRANCA")
+        self.lbl_universidad.setObjectName("nombre_universidad")
+        self.lbl_universidad.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_universidad.setWordWrap(True)
+        layout_capa.addWidget(self.lbl_universidad)
+        layout_capa.addSpacing(4)
+
+        self.lbl_sistema_hero = QLabel("Sistema de Gestión de Talleres")
+        self.lbl_sistema_hero.setObjectName("nombre_sistema_hero")
+        self.lbl_sistema_hero.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout_capa.addWidget(self.lbl_sistema_hero)
+        layout_capa.addSpacing(16)
+
+        self.lbl_frase = QLabel("“Transformando la gestión de talleres universitarios”")
+        self.lbl_frase.setObjectName("frase_motivadora")
+        self.lbl_frase.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_frase.setWordWrap(True)
+        layout_capa.addWidget(self.lbl_frase)
+
+        layout_capa.addStretch()
+        stack.addWidget(capa)
+
+    def establecer_imagen(self, ruta: str | None) -> None:
+        self._pixmap_original = QPixmap(ruta) if ruta and Path(ruta).exists() else QPixmap()
+        self._actualizar_imagen()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._actualizar_imagen()
+
+    def paintEvent(self, event):
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        path = QPainterPath()
+
+        path.moveTo(0,0)
+        path.lineTo(self.width()-self._radio,0)
+        path.quadTo(self.width(),0,self.width(),self._radio)
+        path.lineTo(self.width(),self.height()-self._radio)
+        path.quadTo(
+            self.width(),
+            self.height(),
+            self.width()-self._radio,
+            self.height()
+        )
+        path.lineTo(0,self.height())
+        path.closeSubpath()
+
+        painter.setClipPath(path)
+
+        super().paintEvent(event)
+
+    def _actualizar_imagen(self) -> None:
+        self.lbl_imagen.setFixedSize(self.size())
+
+        if self._pixmap_original.isNull():
+            self.lbl_imagen.setPixmap(QPixmap())
+            self.lbl_imagen.setStyleSheet(
+                "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+                f"stop:0 {AZUL_OSCURO}, stop:1 {AZUL_CLARO});"
+            )
+            return
+
+        self.lbl_imagen.setStyleSheet("")
+        escalado = self._pixmap_original.scaled(
+            self.size(),
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation
+        )
+        x = max(0, (escalado.width() - self.width()) // 2)
+        y = max(0, (escalado.height() - self.height()) // 2)
+        self.lbl_imagen.setPixmap(escalado.copy(x, y, self.width(), self.height()))
+
+
+# ════════════════════════════════════════════════════════════════
+# Ventana de login
+# ════════════════════════════════════════════════════════════════
 class LoginWindow(QDialog):
 
     def __init__(self):
         super().__init__()
         self.sesion_activa = None
-        
+        self._drag_pos: QPoint | None = None
+
         self._configurar_ventana()
         self._construir_ui()
         self._cargar_configuracion_dinamica()
@@ -35,37 +205,120 @@ class LoginWindow(QDialog):
     # ══════════════════════════════════════════════════════════════
 
     def _configurar_ventana(self) -> None:
-        """Configura la ventana principal del login"""
         self.setWindowTitle("Sistema de Talleres — UNAB")
-        self.setFixedSize(800, 480)
-        
-        # Centrar en pantalla
-        pantalla = QApplication.primaryScreen().geometry()
-        x = (pantalla.width() - self.width()) // 2
-        y = (pantalla.height() - self.height()) // 2
-        self.move(x, y)
+        self.setWindowFlags(Qt.Window)
 
-        self.setStyleSheet("""
-            QPushButton#btn_ojo {
+        self.resize(ANCHO_TARJETA + 40, ALTO_TARJETA + 40)
+        self.setFont(QFont("Segoe UI", 10))
+
+        self.setStyleSheet(f"""
+            * {{ font-family: 'Segoe UI', 'Inter', 'Roboto', sans-serif; }}
+
+            QFrame#panel_formulario {{
+                background-color: #ffffff;
+                border-top-left-radius: {RADIO_TARJETA}px;
+                border-bottom-left-radius: {RADIO_TARJETA}px;
+            }}
+
+            QLabel#nombre_sistema {{
+                font-size: 26px;
+                font-weight: 700;
+                color: {GRIS_OSCURO};
+            }}
+            QLabel#subtitulo_sistema {{
+                font-size: 13px;
+                color: #6B7280;
+            }}
+            QLabel#bienvenida_login {{
+                font-size: 14px;
+                color: {GRIS_OSCURO};
+                padding-top: 6px;
+            }}
+
+            QLabel#icono_campo{{
+                background: transparent;
+            }}
+            QPushButton#btn_ojo {{
+                border: none;
+                background: transparent;
+                font-size: 14px;
+                color: #9CA3AF;
+            }}
+            QPushButton#btn_ojo {{
                 border: none;
                 background: transparent;
                 font-size: 16px;
                 padding: 0 8px;
                 color: #73726c;
-            }
-            QPushButton#btn_ojo:hover { color: #3d3d3a; }
-            QLabel#error_msg {
-                color: #C0392B;
-                font-size: 12px;
-                padding: 8px 12px;
-                background-color: #fdf0ee;
-                border-radius: 6px;
-                border: 1px solid #f5c6c0;
-            }
-            QLabel#version {
+            }}
+            QPushButton#btn_ojo:hover {{ color: #3d3d3a; }}
+
+            QLabel#lbl_error {{
+                color: #B91C1C;
                 font-size: 11px;
-                color: #a09e96;
-            }
+                padding: 6px 10px;
+                background-color: #FEF2F2;
+                border: 1px solid #FECACA;
+                border-radius: 6px;
+            }}
+
+            QPushButton#btn_ingresar {{
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 {AZUL_INSTITUCIONAL}, stop:1 {AZUL_CLARO}
+                );
+                color: #ffffff;
+                border: none;
+                border-radius: 10px;
+                font-size: 14px;
+                font-weight: 700;
+                padding: 12px;
+            }}
+            QPushButton#btn_ingresar:hover {{
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 {AZUL_OSCURO}, stop:1 {AZUL_INSTITUCIONAL}
+                );
+            }}
+            QPushButton#btn_ingresar:pressed {{
+                background: {AZUL_OSCURO};
+                padding-top: 13px;
+                padding-bottom: 11px;
+            }}
+            QPushButton#btn_ingresar:disabled {{
+                background: #93C5FD;
+            }}
+
+            QLabel#lbl_version {{
+                color: #9CA3AF;
+                font-size: 11px;
+            }}
+
+            QWidget#overlay_gradiente {{
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(15,23,42,60),
+                    stop:0.55 rgba(15,23,42,110),
+                    stop:1 rgba(15,23,42,170)
+                );
+            }}
+            QLabel#nombre_universidad {{
+                color: #ffffff;
+                font-size: 16px;
+                font-weight: 700;
+                letter-spacing: 1px;
+            }}
+            QLabel#nombre_sistema_hero {{
+                color: #ffffff;
+                font-size: 24px;
+                font-weight: 700;
+            }}
+            QLabel#frase_motivadora {{
+                color: #E5E7EB;
+                font-size: 13px;
+                font-style: italic;
+                padding: 0 20px;
+            }}
         """)
 
     # ══════════════════════════════════════════════════════════════
@@ -73,177 +326,154 @@ class LoginWindow(QDialog):
     # ══════════════════════════════════════════════════════════════
 
     def _construir_ui(self) -> None:
-        """Construye la interfaz con dos columnas: Logo | Formulario"""
-        
-        # Layout principal horizontal (izquierda | derecha)
-        layout_principal = QHBoxLayout(self)
-        layout_principal.setContentsMargins(0, 0, 0, 0)
-        layout_principal.setSpacing(0)
+        # Margen transparente alrededor de la tarjeta: aquí "respira"
+        # la sombra (QGraphicsDropShadowEffect) sin que se corte.
+        layout_ventana = QVBoxLayout(self)
+        layout_ventana.setContentsMargins(
+            MARGEN_SOMBRA, MARGEN_SOMBRA, MARGEN_SOMBRA, MARGEN_SOMBRA
+        )
 
-        # ── LADO IZQUIERDO: LOGO ──────────────────────────────────
+        self.tarjeta = QWidget()
+        self.tarjeta.setFixedSize(ANCHO_TARJETA, ALTO_TARJETA)
+        layout_ventana.addWidget(self.tarjeta)
+
+        sombra = QGraphicsDropShadowEffect(self.tarjeta)
+        sombra.setBlurRadius(46)
+        sombra.setOffset(0, 14)
+        sombra.setColor(Qt.GlobalColor.black)
+        self.tarjeta.setGraphicsEffect(sombra)
+
+        layout_tarjeta = QHBoxLayout(self.tarjeta)
+        layout_tarjeta.setContentsMargins(0, 0, 0, 0)
+        layout_tarjeta.setSpacing(0)
+
+        layout_tarjeta.addWidget(self._construir_panel_formulario(), stretch=5)
+        self.panel_imagen = PanelImagenInstitucional(RADIO_TARJETA)
+        layout_tarjeta.addWidget(self.panel_imagen, stretch=6)
+
+    def _construir_panel_formulario(self) -> QFrame:
+        panel = QFrame()
+        panel.setObjectName("panel_formulario")
+
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(56, 44, 56, 36)
+        layout.setSpacing(4)
+
+        # ── Logo del sistema ───────────────────────────────────────
         self.lbl_logo = QLabel()
-        self.lbl_logo.setObjectName("logo_area")
-        self.lbl_logo.setFixedSize(400, 400)
         self.lbl_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        layout_principal.addWidget(self.lbl_logo)
+        self.lbl_logo.setFixedHeight(84)
+        layout.addWidget(self.lbl_logo)
+        layout.addSpacing(14)
 
-        # ── LADO DERECHO: FORMULARIO ──────────────────────────────
-        contenedor_derecha = QWidget()
-        layout_derecha = QVBoxLayout(contenedor_derecha)
-        layout_derecha.setContentsMargins(50, 60, 50, 50)
-        layout_derecha.setSpacing(10)
+        # ── Nombre + subtítulo ───────────────────────────────────────
+        lbl_nombre = QLabel("Sistema de Talleres")
+        lbl_nombre.setObjectName("nombre_sistema")
+        lbl_nombre.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(lbl_nombre)
 
-        # Título: "Sistema de Talleres"
-        lbl_titulo = QLabel("Sistema de Talleres")
-        lbl_titulo.setObjectName("titulo_login")
-        font_titulo = QFont()
-        font_titulo.setPointSize(22)
-        font_titulo.setBold(True)
-        lbl_titulo.setFont(font_titulo)
-        lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout_derecha.addWidget(lbl_titulo)
+        self.lbl_subtitulo = QLabel("Universidad Nacional de Barranca")
+        self.lbl_subtitulo.setObjectName("subtitulo_sistema")
+        self.lbl_subtitulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.lbl_subtitulo)
 
-        # Subtítulo: "Universidad Nacional de Barranca" (DINÁMICO)
-        self.lbl_institucion = QLabel()
-        self.lbl_institucion.setObjectName("subtitulo_login")
-        font_subtitulo = QFont()
-        font_subtitulo.setPointSize(10)
-        self.lbl_institucion.setFont(font_subtitulo)
-        self.lbl_institucion.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_institucion.setStyleSheet("color: #666;")
-        layout_derecha.addWidget(self.lbl_institucion)
+        lbl_bienvenida = QLabel("Bienvenido de nuevo, ingresa tus credenciales")
+        lbl_bienvenida.setObjectName("bienvenida_login")
+        lbl_bienvenida.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(lbl_bienvenida)
 
-        # Espacio
-        layout_derecha.addSpacing(25)
+        layout.addSpacing(26)
 
-        # ── Campo: Usuario ────────────────────────────────────────
-        lbl_usuario = QLabel("Usuario")
-        lbl_usuario.setObjectName("label_campo")
-        font_label = QFont()
-        font_label.setPointSize(12)
-        font_label.setBold(True)
-        lbl_usuario.setFont(font_label)
-        layout_derecha.addWidget(lbl_usuario)
+        # ── Campo usuario ────────────────────────────────────────
+        self.campo_usuario = CampoLogin("👤", "Usuario")
+        layout.addWidget(self.campo_usuario)
+        layout.addSpacing(18)
 
-        self.input_usuario = QLineEdit()
-        self.input_usuario.setObjectName("input_campo")
-        self.input_usuario.setPlaceholderText("Ingresa tu usuario")
-        self.input_usuario.setMinimumHeight(45)
+        # ── Campo contraseña ─────────────────────────────────────
+        self.campo_password = CampoLogin("🔒", "Contraseña", es_password=True)
+        layout.addWidget(self.campo_password)
+        layout.addSpacing(14)
 
-        layout_derecha.addWidget(self.input_usuario)
-
-        # ── Campo: Contraseña ────────────────────────────────────
-        lbl_password = QLabel("Contraseña")
-        lbl_password.setObjectName("label_campo")
-        lbl_password.setFont(font_label)
-        layout_derecha.addWidget(lbl_password)
-
-        # Contenedor: Input + Botón ojo
-        layout_password = QHBoxLayout()
-        layout_password.setSpacing(5)
-
-        self.input_password = QLineEdit()
-        self.input_password.setObjectName("input_campo")
-        self.input_password.setPlaceholderText("Ingresa tu contraseña")
-        self.input_password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.input_password.setMinimumHeight(45)
-
-        self.btn_ojo = QPushButton("👁")
-        self.btn_ojo.setObjectName("btn_ojo")
-        self.btn_ojo.setFixedSize(45, 45)
-        self.btn_ojo.setCheckable(True)
-
-        layout_password.addWidget(self.input_password)
-        layout_password.addWidget(self.btn_ojo)
-        layout_derecha.addLayout(layout_password)
-
-        # ── Mensaje de error (oculto) ──────────────────────────────
+        # ── Mensaje de error (oculto) ────────────────────────────
         self.lbl_error = QLabel()
         self.lbl_error.setObjectName("lbl_error")
         self.lbl_error.setWordWrap(True)
         self.lbl_error.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
         self.lbl_error.setVisible(False)
-        layout_derecha.addWidget(self.lbl_error)
+        layout.addWidget(self.lbl_error)
+
+        layout.addSpacing(10)
 
         # ── Botón Ingresar ────────────────────────────────────────
-        self.btn_ingresar = QPushButton("INGRESAR")
+        self.btn_ingresar = QPushButton("INICIAR SESIÓN")
         self.btn_ingresar.setObjectName("btn_ingresar")
-        self.btn_ingresar.setMinimumHeight(50)
- 
-        layout_derecha.addWidget(self.btn_ingresar)
+        self.btn_ingresar.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_ingresar.setMinimumHeight(44)
+        layout.addWidget(self.btn_ingresar)
 
-        # Espacio flexible
-        layout_derecha.addStretch()
-
+        layout.addStretch()
 
         # ── Versión al pie ────────────────────────────────────────
         lbl_version = QLabel("v1.0.0 · UNAB Talleres")
         lbl_version.setObjectName("lbl_version")
         lbl_version.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_version.setStyleSheet("""
-            QLabel#lbl_version {
-                color: #999;
-                font-size: 11px;
-            }
-        """)
-        layout_derecha.addWidget(lbl_version)
+        layout.addWidget(lbl_version)
 
-        # Agregar la columna derecha al layout principal
-        layout_principal.addWidget(contenedor_derecha, stretch=1)
+        return panel
+
 
     # ══════════════════════════════════════════════════════════════
     # CARGAR CONFIGURACIÓN DINÁMICA
     # ══════════════════════════════════════════════════════════════
 
     def _cargar_configuracion_dinamica(self) -> None:
-        """Carga logo y nombre desde configuracion.json"""
+        """Carga logo, nombre institucional y (si existe) imagen de fondo."""
         try:
-            # Obtener configuración
             resultado = ConfiguracionService.obtener()
-            
+
             if resultado.ok:
                 config = resultado.datos
-                
-                # ── Cargar nombre institución ──────────────────────
                 nombre = config.get("nombre_institucion", "Universidad Nacional de Barranca")
-                self.lbl_institucion.setText(nombre)
-                
-                # ── Cargar logo ────────────────────────────────────
+                self.lbl_subtitulo.setText(nombre)
+                self.panel_imagen.lbl_universidad.setText(nombre.upper())
+
                 logo_ruta = config.get("logo_ruta")
                 if logo_ruta:
                     self._cargar_logo(logo_ruta)
                 else:
                     self._mostrar_placeholder_logo()
+
+
+                fondo_ruta = config.get("fondo_ruta")
+                if fondo_ruta:
+                    ruta_fondo_abs = ConfiguracionService.obtener_ruta_logo_absoluta(fondo_ruta)
+                    self.panel_imagen.establecer_imagen(ruta_fondo_abs)
+                else:
+                    self.panel_imagen.establecer_imagen(None)
             else:
-                # Sin configuración, mostrar defaults
-                self.lbl_institucion.setText("Universidad Nacional de Barranca")
                 self._mostrar_placeholder_logo()
-                
+                self.panel_imagen.establecer_imagen(None)
+
         except Exception as e:
             print(f"Error cargando configuración: {e}")
-            self.lbl_institucion.setText("Universidad Nacional de Barranca")
             self._mostrar_placeholder_logo()
+            self.panel_imagen.establecer_imagen(None)
 
     def _cargar_logo(self, logo_ruta: str) -> None:
-        """Carga y muestra la imagen del logo"""
         try:
             ruta_absoluta = ConfiguracionService.obtener_ruta_logo_absoluta(logo_ruta)
-            
             if ruta_absoluta and Path(ruta_absoluta).exists():
                 pixmap = QPixmap(ruta_absoluta)
-                
-                # Escalar para que quepa en el área (450×650)
 
-                ancho_deseado = 250  # Un poco más pequeño que el área para dejar margen
-                pixmap_escalado = pixmap.scaledToWidth(
-                    ancho_deseado,
-                    Qt.TransformationMode.SmoothTransformation  # Evita que se pixele
-                )    
-                
-                self.lbl_logo.setPixmap(pixmap_escalado)
-                self.lbl_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                logo_form = pixmap.scaledToHeight(
+                    80, Qt.TransformationMode.SmoothTransformation
+                )
+                self.lbl_logo.setPixmap(logo_form)
+
+                logo_hero = pixmap.scaledToHeight(
+                    72, Qt.TransformationMode.SmoothTransformation
+                )
+                self.panel_imagen.lbl_logo_institucional.setPixmap(logo_hero)
             else:
                 self._mostrar_placeholder_logo()
         except Exception as e:
@@ -251,104 +481,63 @@ class LoginWindow(QDialog):
             self._mostrar_placeholder_logo()
 
     def _mostrar_placeholder_logo(self) -> None:
-        """Muestra un placeholder cuando no hay logo"""
-        self.lbl_logo.setText("Sin logo\ncargado")
-        self.lbl_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_logo.setStyleSheet("""
-            QLabel#logo_area {
-                background-color: #f0f0f0;
-                color: #999;
-                font-size: 18px;
-                border: none;
-            }
-        """)
+        self.lbl_logo.setText("🎓")
+        self.lbl_logo.setStyleSheet("font-size: 46px;")
+        self.panel_imagen.lbl_logo_institucional.setText("🎓")
+        self.panel_imagen.lbl_logo_institucional.setStyleSheet("font-size: 40px; color: white;")
 
     # ══════════════════════════════════════════════════════════════
     # CONEXIÓN DE SEÑALES (EVENTOS)
     # ══════════════════════════════════════════════════════════════
 
     def _conectar_senales(self) -> None:
-        """Conecta eventos de los widgets"""
-        
-        # Botón Ingresar
         self.btn_ingresar.clicked.connect(self._intentar_login)
-        
-        # Enter en campos de texto
-        self.input_usuario.returnPressed.connect(self._intentar_login)
-        self.input_password.returnPressed.connect(self._intentar_login)
-        
-        # Botón ojo - mostrar/ocultar contraseña
-        self.btn_ojo.toggled.connect(self._toggle_password_visible)
-        
-        # Limpiar error al escribir
-        self.input_usuario.textChanged.connect(self._limpiar_error)
-        self.input_password.textChanged.connect(self._limpiar_error)
+
+        self.campo_usuario.input.returnPressed.connect(self._intentar_login)
+        self.campo_password.input.returnPressed.connect(self._intentar_login)
+
+        self.campo_password.btn_ojo.toggled.connect(self._toggle_password_visible)
+
+        self.campo_usuario.input.textChanged.connect(self._limpiar_error)
+        self.campo_password.input.textChanged.connect(self._limpiar_error)
 
     # ══════════════════════════════════════════════════════════════
     # LÓGICA DEL LOGIN
     # ══════════════════════════════════════════════════════════════
 
     def _intentar_login(self) -> None:
-        """Intenta hacer login con las credenciales"""
-        
-        username = self.input_usuario.text().strip()
-        password = self.input_password.text()
+        username = self.campo_usuario.texto().strip()
+        password = self.campo_password.texto()
 
-        # Validación básica
         if not username or not password:
             self._mostrar_error("Por favor completa todos los campos")
             return
 
-        # Deshabilitar botón mientras procesa
         self.btn_ingresar.setEnabled(False)
-        self.btn_ingresar.setText("Verificando...")
+        self.btn_ingresar.setText("VERIFICANDO...")
         QApplication.processEvents()
 
-        # Intentar login
         resultado = AuthService.login(username, password)
 
         if resultado.ok:
-            # ✅ Login exitoso
             self.sesion_activa = resultado.sesion
             self.accept()
         else:
-            # ❌ Login fallido
             self._mostrar_error(resultado.mensaje)
             self.btn_ingresar.setEnabled(True)
-            self.btn_ingresar.setText("INGRESAR")
-            self.input_password.clear()
-            self.input_usuario.setFocus()
+            self.btn_ingresar.setText("INICIAR SESIÓN")
+            self.campo_password.input.clear()
+            self.campo_usuario.input.setFocus()
 
     def _mostrar_error(self, mensaje: str) -> None:
-        """Muestra un mensaje de error"""
         self.lbl_error.setText(mensaje)
         self.lbl_error.setVisible(True)
-        
-        # Resaltar inputs con error
-        self.input_usuario.setProperty("error", "true")
-        self.input_password.setProperty("error", "true")
-        
-        # Recalcular estilos
-        self.input_usuario.style().unpolish(self.input_usuario)
-        self.input_usuario.style().polish(self.input_usuario)
-        self.input_password.style().unpolish(self.input_password)
-        self.input_password.style().polish(self.input_password)
 
     def _limpiar_error(self) -> None:
-        """Limpia el mensaje de error cuando el usuario escribe"""
         if self.lbl_error.isVisible():
             self.lbl_error.setVisible(False)
-            
-            self.input_usuario.setProperty("error", "false")
-            self.input_password.setProperty("error", "false")
-            
-            self.input_usuario.style().unpolish(self.input_usuario)
-            self.input_usuario.style().polish(self.input_usuario)
-            self.input_password.style().unpolish(self.input_password)
-            self.input_password.style().polish(self.input_password)
 
     def _toggle_password_visible(self, visible: bool) -> None:
-        """Alterna entre mostrar y ocultar la contraseña"""
         modo = QLineEdit.EchoMode.Normal if visible else QLineEdit.EchoMode.Password
-        self.input_password.setEchoMode(modo)
-        self.btn_ojo.setText("🙈" if visible else "👁")
+        self.campo_password.input.setEchoMode(modo)
+        self.campo_password.btn_ojo.setText("🙈" if visible else "👁")

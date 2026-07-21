@@ -6,10 +6,12 @@ RF-16: Registrar Asistencia
   ✓ Estados: P (Presente), A (Ausente), J (Justificado)
   ✓ Solo docentes pueden registrar sus talleres
   ✓ Un registro por estudiante por sesión (UNIQUE)
+  ✓ Al registrar, si la sesión estaba "Programada" pasa a "Realizada"
 
 RF-17: Marcar en bloque
   ✓ Marcar todos presentes/ausentes de una sesión
   ✓ Recalcula porcentaje en tiempo real
+  ✓ También dispara Programada → Realizada al terminar
 
 RF-18: Agregar observación
   ✓ Observación obligatoria si estado == "J"
@@ -21,7 +23,9 @@ RF-19: Cambiar estado (Operador de Bienestar)
 
 RF-20: Congelar registro
   ✓ No permite editar asistencia después del día de la sesión
-  ✓ Solo admin con autorización explícita puede descongelar
+  ✓ Administrador siempre puede editar sesiones congeladas
+  ✓ Un docente puede editar una sesión congelada SOLO si el admin lo
+    autorizó puntualmente para esa sesión (ver _tiene_autorizacion_activa)
 """
 
 from dataclasses import dataclass
@@ -53,31 +57,21 @@ class ResultadoAsistencia:
 class AsistenciaService:
     """Servicio completo de gestión de asistencia."""
 
+    # Marcadores usados dentro de Auditoria.datos_nuevos para poder
+    # distinguir "autorizar" de "revocar" sin tocar la columna `accion`
+    # (que el ENUM de la BD solo permite INSERT/UPDATE/DELETE).
+    _TIPO_AUTORIZAR = "AUTORIZAR_EDICION_ASISTENCIA"
+    _TIPO_REVOCAR = "REVOCAR_AUTORIZACION_EDICION_ASISTENCIA"
+
     # ══════════════════════════════════════════════════════════════
     # RF-16: REGISTRAR ASISTENCIA
     # ══════════════════════════════════════════════════════════════
 
     @staticmethod
     def registrar(sesion_id: int, inscripcion_id: int, estado: str,
-                  usuario_id: int, observacion: str = "") -> ResultadoAsistencia:
-        """
-        ✅ RF-16: Registra asistencia de un estudiante en una sesión.
+                  usuario_id: int, observacion: str = "",
+                  rol_usuario: str = "Docente") -> ResultadoAsistencia:
 
-        VALIDACIONES:
-          • Estado debe ser P/A/J
-          • Si J, observación es obligatoria
-          • No se puede registrar después del día de la sesión (RF-20)
-          • Un solo registro por inscripción-sesión (UNIQUE)
-
-        PARÁMETROS:
-          sesion_id: ID de la sesión
-          inscripcion_id: ID de la inscripción (NO estudiante_id directo)
-          estado: "P" | "A" | "J"
-          observacion: Obligatorio si estado == "J"
-
-        RETORNA:
-          ResultadoAsistencia con ok=True y mensaje
-        """
 
         # Validar estado
         if estado not in ("P", "A", "J"):
@@ -101,10 +95,12 @@ class AsistenciaService:
                     return ResultadoAsistencia(False, "Sesión no encontrada")
 
                 # RF-20: Verificar que no haya pasado el día de la sesión
-                if AsistenciaService._sesion_congelada(sesion):
+                # (o que el usuario esté autorizado a editarla igual)
+                if AsistenciaService._bloqueada_para(sesion, usuario_id, rol_usuario):
                     return ResultadoAsistencia(False,
                         "Esta sesión está congelada (pasó la fecha). "
-                        "Contacta al administrador para modificaciones.")
+                        "Solo un administrador, o un docente autorizado por uno, "
+                        "puede modificarla.")
 
                 # Verificar si ya hay registro (UNIQUE constraint)
                 ya_registrado = session.query(Asistencia).filter(
@@ -154,9 +150,14 @@ class AsistenciaService:
                 if porcentaje < sesion.taller.umbral_asistencia:
                     alerta = f" ⚠️ ALERTA: Estudiante bajo umbral ({porcentaje:.1f}% < {sesion.taller.umbral_asistencia}%)"
 
-                return ResultadoAsistencia(True,
-                    f"Asistencia registrada correctamente.{alerta}",
-                    datos={"porcentaje": porcentaje})
+                mensaje = f"Asistencia registrada correctamente.{alerta}"
+
+            # ── Fuera del "with": la transacción de asistencia ya cerró ──
+            # ✅ Si la sesión seguía "Programada", pasa a "Realizada".
+            AsistenciaService._marcar_sesion_realizada(sesion_id, usuario_id)
+
+            return ResultadoAsistencia(True, mensaje,
+                datos={"porcentaje": porcentaje})
 
         except SQLAlchemyError as e:
             return ResultadoAsistencia(False, f"Error al guardar: {e}")
@@ -167,7 +168,7 @@ class AsistenciaService:
 
     @staticmethod
     def marcar_todos(sesion_id: int, estado: str,
-                     usuario_id: int) -> ResultadoAsistencia:
+                     usuario_id: int, rol_usuario: str = "Docente") -> ResultadoAsistencia:
         """
         ✅ RF-17: Marca todos los inscritos de una sesión con el mismo estado.
 
@@ -176,6 +177,7 @@ class AsistenciaService:
           2. Para cada uno, crear/actualizar asistencia
           3. Recalcular porcentaje de cada uno
           4. Auditar en bloque
+          5. Si la sesión estaba "Programada", pasa a "Realizada"
 
         PARÁMETROS:
           sesion_id: ID de la sesión
@@ -197,9 +199,10 @@ class AsistenciaService:
                     return ResultadoAsistencia(False, "Sesión no encontrada")
 
                 # RF-20: Verificar congelación
-                if AsistenciaService._sesion_congelada(sesion):
+                if AsistenciaService._bloqueada_para(sesion, usuario_id, rol_usuario):
                     return ResultadoAsistencia(False,
-                        "Esta sesión está congelada. No se pueden hacer cambios.")
+                        "Esta sesión está congelada. Solo un administrador, o un "
+                        "docente autorizado por uno, puede hacer cambios.")
 
                 # Obtener inscritos activos
                 inscritos = session.query(Inscripcion).filter(
@@ -249,16 +252,53 @@ class AsistenciaService:
 
                 session.commit()
 
-                # Preparar mensaje con alertas
                 mensaje = f"✓ {registrados} asistencias marcadas como {estado}"
                 if alertas:
                     mensaje += f"\n⚠️ {len(alertas)} estudiante(s) bajo umbral"
 
-                return ResultadoAsistencia(True, mensaje,
-                    datos={"registrados": registrados, "alertas": alertas})
+            # ── Fuera del "with": ya se commiteó la asistencia en bloque ──
+            AsistenciaService._marcar_sesion_realizada(sesion_id, usuario_id)
+
+            return ResultadoAsistencia(True, mensaje,
+                datos={"registrados": registrados, "alertas": alertas})
 
         except SQLAlchemyError as e:
             return ResultadoAsistencia(False, f"Error: {e}")
+
+    # ══════════════════════════════════════════════════════════════
+    # TRANSICIÓN AUTOMÁTICA DE ESTADO DE SESIÓN (Programada → Realizada)
+    # ══════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _marcar_sesion_realizada(sesion_id: int, usuario_id: int) -> None:
+        """
+        Si la sesión sigue en "Programada", la pasa a "Realizada" porque
+        ya se le registró asistencia (al menos un estudiante).
+
+        No hace nada si la sesión ya está "Realizada" o "Cancelada": no
+        se debe revertir una cancelación solo porque alguien registró
+        asistencia por error, ni reprocesar sesiones ya realizadas.
+
+        Import local de SesionService para evitar un ciclo de imports
+        entre services/asistencia_service.py y services/sesion_service.py.
+        """
+        from services.sesion_service import SesionService
+
+        try:
+            with get_session() as session:
+                sesion = session.get(Sesion, sesion_id)
+                if not sesion or sesion.estado != "Programada":
+                    return
+        except SQLAlchemyError:
+            return
+
+        # Este cambio de estado abre su propia sesión/transacción y
+        # auditoría vía SesionService.cambiar_estado; si falla, no debe
+        # tumbar el registro de asistencia que ya se guardó exitosamente.
+        try:
+            SesionService.cambiar_estado(sesion_id, "Realizada", usuario_id)
+        except Exception:
+            pass
 
     # ══════════════════════════════════════════════════════════════
     # RF-19: CAMBIAR ESTADO (Operador de Bienestar)
@@ -269,7 +309,7 @@ class AsistenciaService:
                       usuario_id: int, rol_usuario: str) -> ResultadoAsistencia:
         """
         ✅ RF-19: Cambiar A → J (Ausente a Justificado).
-        
+
         RESTRICCIÓN:
           Solo Operador y Administrador pueden hacer esto.
 
@@ -307,16 +347,21 @@ class AsistenciaService:
                 estado_anterior = asist.estado
 
                 # RF-20: Verificar congelación
-                if AsistenciaService._sesion_congelada(asist.sesion):
+                if AsistenciaService._bloqueada_para(asist.sesion, usuario_id, rol_usuario):
                     return ResultadoAsistencia(False,
-                        "Sesión congelada. No se permite cambiar estados.")
+                        "Sesión congelada. Solo un administrador, o un docente "
+                        "autorizado por uno, puede cambiar estados.")
 
                 # Cambiar estado
                 asist.estado = nuevo_estado
                 asist.updated_at = datetime.now()
 
                 if nuevo_estado == "J":
-                    asist.observacion = f"Justificado por {Usuario.query.get(usuario_id).nombre_completo}"
+                    # ⚠️ Bug preexistente: `Usuario.query` no existe en este proyecto
+                    # (no se usa Flask-SQLAlchemy). Debe resolverse con get_session():
+                    usuario = session.get(Usuario, usuario_id)
+                    nombre_usuario = usuario.nombre_completo if usuario else "usuario desconocido"
+                    asist.observacion = f"Justificado por {nombre_usuario}"
 
                 session.flush()
 
@@ -352,18 +397,165 @@ class AsistenciaService:
 
     @staticmethod
     def _sesion_congelada(sesion: Sesion) -> bool:
-        """
-        ✅ RF-20: Verifica si una sesión está congelada.
-
-        REGLA:
-          Si hoy > fecha de sesión → sesión congelada
-          No se permite editar sin autorización admin
-
-        RETORNA:
-          True si sesión está congelada (pasó la fecha)
-        """
         hoy = date.today()
         return hoy > sesion.fecha
+
+    # ══════════════════════════════════════════════════════════════
+    # RF-20 (extendido): ADMIN + AUTORIZACIÓN PUNTUAL A DOCENTES
+    # ══════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def puede_editar_sesion_congelada(sesion_id: int, usuario_id: int,
+                                       rol_usuario: str) -> bool:
+        """
+        Punto único de verdad: ¿puede este usuario editar una sesión
+        aunque ya esté congelada (pasó su fecha)?
+
+          • Administrador → siempre puede (control total del sistema)
+          • Docente       → solo si el admin autorizó ESTA sesión puntual
+          • Operador/otros→ no
+
+        No depende de ninguna tabla nueva: la autorización de docentes
+        se guarda como eventos en 'auditoria' (ver más abajo).
+        """
+        if rol_usuario == "Administrador":
+            return True
+        if rol_usuario == "Docente":
+            return AsistenciaService._tiene_autorizacion_activa(sesion_id, usuario_id)
+        return False
+
+    @staticmethod
+    def _bloqueada_para(sesion: Sesion, usuario_id: int, rol_usuario: str) -> bool:
+        """Combina la congelación por fecha (RF-20) con la excepción de arriba."""
+        if not AsistenciaService._sesion_congelada(sesion):
+            return False
+        return not AsistenciaService.puede_editar_sesion_congelada(
+            sesion.id, usuario_id, rol_usuario
+        )
+
+    @staticmethod
+    def _tiene_autorizacion_activa(sesion_id: int, docente_id: int) -> bool:
+        """
+        Revisa el historial de auditoría y busca el evento MÁS RECIENTE
+        de autorización/revocación para ese docente en esa sesión.
+
+        ✅ CORRECCIÓN: el filtro anterior (`Auditoria.datos_nuevos in (...)`)
+        no era una condición SQL válida — comparaba la columna completa
+        contra strings sueltos usando el operador `in` de Python, lo cual
+        no filtra nada realmente (o directamente rompe). Además, tanto
+        autorizar como revocar escriben accion="UPDATE" (el ENUM no admite
+        otro valor), así que no se puede distinguir por esa columna.
+
+        La distinción ahora se hace con la clave "tipo_evento" dentro de
+        datos_nuevos (ver autorizar_edicion_congelada / revocar_...), y el
+        filtrado por docente se hace en Python porque los datos vienen en
+        una columna JSON.
+        """
+        try:
+            with get_session() as session:
+                eventos = session.query(Auditoria).filter(
+                    Auditoria.tabla_afectada == "sesiones",
+                    Auditoria.registro_id == sesion_id,
+                    Auditoria.accion == "UPDATE"
+                ).order_by(Auditoria.id.desc()).all()
+
+                for evento in eventos:
+                    datos = evento.datos_nuevos or {}
+
+                    if datos.get("docente_autorizado_id") != docente_id:
+                        continue
+
+                    tipo = datos.get("tipo_evento")
+
+                    if tipo == AsistenciaService._TIPO_REVOCAR:
+                        return False
+                    if tipo == AsistenciaService._TIPO_AUTORIZAR:
+                        return True
+
+                    # Evento antiguo sin "tipo_evento" (datos de antes de
+                    # este fix): no se puede confiar en él, se ignora.
+                    continue
+
+                return False
+        except SQLAlchemyError:
+            return False
+
+    @staticmethod
+    def autorizar_edicion_congelada(sesion_id: int, docente_id: int,
+                                     usuario_id: int, rol_solicitante: str,
+                                     razon: str = "") -> ResultadoAsistencia:
+        """
+        ✅ El administrador autoriza a un docente puntual a editar la
+        asistencia de una sesión ya congelada, típicamente a petición
+        del propio docente.
+
+        No crea ninguna tabla: queda registrado como evento en 'auditoria',
+        igual que cualquier otra acción del sistema.
+        """
+        if rol_solicitante != "Administrador":
+            return ResultadoAsistencia(False,
+                "Solo un administrador puede autorizar la edición de sesiones congeladas.")
+
+        try:
+            with get_session() as session:
+                sesion = session.get(Sesion, sesion_id)
+                if not sesion:
+                    return ResultadoAsistencia(False, "Sesión no encontrada")
+
+                docente = session.get(Usuario, docente_id)
+                if not docente:
+                    return ResultadoAsistencia(False, "Docente no encontrado")
+
+                session.add(Auditoria(
+                    usuario_id=usuario_id,
+                    tabla_afectada="sesiones",
+                    accion="UPDATE",
+                    registro_id=sesion_id,
+                    datos_nuevos={
+                        "tipo_evento": AsistenciaService._TIPO_AUTORIZAR,
+                        "docente_autorizado_id": docente_id,
+                        "docente_nombre": docente.nombre_completo,
+                        "razon": razon,
+                        "autorizado_en": datetime.now().isoformat()
+                    }
+                ))
+                session.commit()
+
+                return ResultadoAsistencia(True,
+                    f"Se autorizó a {docente.nombre_completo} a editar la "
+                    f"asistencia de esta sesión aunque esté congelada.")
+
+        except SQLAlchemyError as e:
+            return ResultadoAsistencia(False, f"Error al autorizar: {e}")
+
+    @staticmethod
+    def revocar_autorizacion_edicion(sesion_id: int, docente_id: int,
+                                      admin_usuario_id: int,
+                                      rol_solicitante: str) -> ResultadoAsistencia:
+        """Revierte una autorización previamente otorgada a un docente."""
+        if rol_solicitante != "Administrador":
+            return ResultadoAsistencia(False,
+                "Solo un administrador puede revocar autorizaciones.")
+
+        try:
+            with get_session() as session:
+                session.add(Auditoria(
+                    usuario_id=admin_usuario_id,
+                    tabla_afectada="sesiones",
+                    accion="UPDATE",
+                    registro_id=sesion_id,
+                    datos_nuevos={
+                        "tipo_evento": AsistenciaService._TIPO_REVOCAR,
+                        "docente_autorizado_id": docente_id,
+                        "revocado_en": datetime.now().isoformat()
+                    }
+                ))
+                session.commit()
+
+                return ResultadoAsistencia(True, "Autorización revocada correctamente.")
+
+        except SQLAlchemyError as e:
+            return ResultadoAsistencia(False, f"Error al revocar: {e}")
 
     @staticmethod
     def descongelar_sesion(sesion_id: int, usuario_id: int,
@@ -389,9 +581,10 @@ class AsistenciaService:
                 session.add(Auditoria(
                     usuario_id=usuario_id,
                     tabla_afectada="sesiones",
-                    accion="DESCONGELAR",
+                    accion="UPDATE",
                     registro_id=sesion_id,
-                    datos_nuevos={"razon": razon, "decongelada_en": datetime.now()}
+                    # ✅ corregido: faltaba llamar isoformat()
+                    datos_nuevos={"razon": razon, "decongelada_en": datetime.now().isoformat()}
                 ))
 
                 session.commit()

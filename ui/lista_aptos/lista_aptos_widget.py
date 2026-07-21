@@ -265,7 +265,7 @@ class ListaAptosWidget(QWidget):
 
         info_texto = (
             f"📊 {aptos} aptos ({pct_aptos:.1f}%)  |  "
-            f"❌ {desaptos} desaptos  |  "
+            f"❌ {desaptos} no aptos  |  "
             f"Umbral: {datos['umbral']}%"
         )
         self.lbl_info.setText(info_texto)

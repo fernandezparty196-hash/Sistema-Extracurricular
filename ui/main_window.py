@@ -65,7 +65,7 @@ class MainWindow(QMainWindow):
 
     def _configurar_ventana(self) -> None:
         self.setWindowTitle(f"Sistema de Talleres UNAB — {self.sesion.nombre_completo}")
-        self.setMinimumSize(1100, 600)
+        self.setMinimumSize(1000, 550)
         self.resize(1280, 760)
 
         pantalla = QApplication.primaryScreen().geometry()

@@ -1,8 +1,20 @@
 """
-ui/dashboard.py   ──   HU-12 Dashboard (CORREGIDO)
+ui/dashboard.py   ──   HU-12 Dashboard (con alcance por rol)
 ═════════════════════════════════════════════════════════════
 
-CORRECCIONES:
+ALCANCE POR ROL (esto es lo nuevo):
+  ✅ Administrador (u Operador): ve el resumen global, igual que antes
+     (todos los talleres, todos los estudiantes).
+  ✅ Docente: todo se filtra a SUS talleres — tarjetas ("Mis
+     Talleres", "Mis Estudiantes", "Mis Estudiantes en Riesgo") y la
+     tabla de abajo pasa a llamarse "🗓️ Mi Horario de Talleres",
+     mostrando solo las sesiones futuras de los talleres que dicta.
+
+  El filtrado real ocurre en ReporteService.obtener_datos_dashboard()
+  (usuario_id + rol_nombre) — este widget solo decide qué texto poner
+  en las etiquetas según el rol; nunca toca la BD directamente.
+
+CORRECCIONES PREVIAS (se mantienen):
   ✅ Usa ReporteServiceMejorado en lugar de ReporteService
   ✅ CSS compatible con Qt (sin box-shadow)
   ✅ Manejo correcto de errores
@@ -26,6 +38,12 @@ class DashboardWidget(QWidget):
         self.sesion_usuario = sesion_usuario
         self.reporte_service = ReporteService()
         self.datos_dashboard = None
+
+        # Alcance por rol: Docente ve solo sus talleres; cualquier otro
+        # rol (Administrador, Operador) ve el resumen global.
+        self.es_docente = bool(
+            sesion_usuario and getattr(sesion_usuario, "rol_nombre", None) == "Docente"
+        )
 
         self._configurar_widget()
         self._construir_ui()
@@ -84,18 +102,24 @@ class DashboardWidget(QWidget):
         layout.addLayout(header_layout)
 
         # ── TARJETAS DE RESUMEN ────────────────────────────────────
+        # Etiquetas según alcance: "Mis..." para docente, genéricas
+        # para el resto (mismo texto que ya tenías).
+        titulo_talleres     = "Mis Talleres" if self.es_docente else "Total de Talleres"
+        titulo_estudiantes  = "Mis Estudiantes" if self.es_docente else "Total de Estudiantes"
+        titulo_riesgo       = "Mis Estudiantes en Riesgo" if self.es_docente else "Estudiantes en Riesgo"
+
         grid_layout = QGridLayout()
         grid_layout.setSpacing(15)
 
         # Tarjeta 1: Total Talleres
         self.tarjeta_talleres = self._crear_tarjeta_numero(
-            "0", "Total de Talleres", "#3b82f6"
+            "0", titulo_talleres, "#3b82f6"
         )
         grid_layout.addWidget(self.tarjeta_talleres, 0, 0)
 
         # Tarjeta 2: Total Estudiantes
         self.tarjeta_estudiantes = self._crear_tarjeta_numero(
-            "0", "Total de Estudiantes", "#10b981"
+            "0", titulo_estudiantes, "#10b981"
         )
         grid_layout.addWidget(self.tarjeta_estudiantes, 0, 1)
 
@@ -107,14 +131,15 @@ class DashboardWidget(QWidget):
 
         # Tarjeta 4: En Riesgo
         self.tarjeta_riesgo = self._crear_tarjeta_numero(
-            "0", "Estudiantes en Riesgo", "#ef4444"
+            "0", titulo_riesgo, "#ef4444"
         )
         grid_layout.addWidget(self.tarjeta_riesgo, 0, 3)
 
         layout.addLayout(grid_layout)
 
         # ── PRÓXIMA SESIÓN ─────────────────────────────────────────
-        label_proxima = QLabel("Próxima Sesión Programada:")
+        texto_proxima = "Mi Próxima Sesión:" if self.es_docente else "Próxima Sesión Programada:"
+        label_proxima = QLabel(texto_proxima)
         label_proxima.setFont(QFont("Arial", 12, QFont.Bold))
         layout.addWidget(label_proxima)
 
@@ -133,8 +158,9 @@ class DashboardWidget(QWidget):
         self.frame_proxima.setLayout(proxima_layout)
         layout.addWidget(self.frame_proxima)
 
-        # ── TABLA DE PRÓXIMAS SESIONES ─────────────────────────────
-        label_sesiones = QLabel("Próximas Sesiones:")
+        # ── TABLA: "Mi Horario" (docente) / "Próximas Sesiones" (resto) ──
+        texto_tabla_sesiones = "🗓️ Mi Horario de Talleres:" if self.es_docente else "Próximas Sesiones:"
+        label_sesiones = QLabel(texto_tabla_sesiones)
         label_sesiones.setFont(QFont("Arial", 12, QFont.Bold))
         layout.addWidget(label_sesiones)
 
@@ -199,10 +225,15 @@ class DashboardWidget(QWidget):
         return frame
 
     def _cargar_datos(self) -> None:
-        """Carga los datos del dashboard."""
+        """Carga los datos del dashboard, ya filtrados por rol en el servicio."""
         try:
-            # ✅ Usar ReporteServiceMejorado
-            resultado = self.reporte_service.obtener_datos_dashboard()
+            usuario_id = getattr(self.sesion_usuario, "usuario_id", None)
+            rol_nombre = getattr(self.sesion_usuario, "rol_nombre", None)
+
+            resultado = self.reporte_service.obtener_datos_dashboard(
+                usuario_id=usuario_id,
+                rol_nombre=rol_nombre,
+            )
 
             if not resultado.ok:
                 # No mostrar error, solo mostrar mensaje en tarjetas
@@ -235,10 +266,14 @@ class DashboardWidget(QWidget):
             resumen = self.datos_dashboard.get("resumen", {})
             sesiones = self.datos_dashboard.get("proximas_sesiones", [])
 
-            # Actualizar bienvenida
+            # Actualizar bienvenida (incluye el rol, igual que la topbar)
             if self.sesion_usuario:
                 nombre = self.sesion_usuario.nombre_completo
-                self.label_bienvenida.setText(f"Bienvenido, {nombre}")
+                rol = getattr(self.sesion_usuario, "rol_nombre", "")
+                texto_bienvenida = f"Bienvenido, {nombre}"
+                if rol:
+                    texto_bienvenida += f"  ·  {rol}"
+                self.label_bienvenida.setText(texto_bienvenida)
 
             # Actualizar tarjetas de resumen
             self.tarjeta_talleres.numero_label.setText(
@@ -266,10 +301,14 @@ class DashboardWidget(QWidget):
                     f"Ubicación: {proxima.get('ubicacion', '')}"
                 )
             else:
-                self.label_proxima_taller.setText("No hay sesiones próximas")
+                mensaje_vacio = (
+                    "No tienes talleres asignados" if self.es_docente and not sesiones
+                    else "No hay sesiones próximas"
+                )
+                self.label_proxima_taller.setText(mensaje_vacio)
                 self.label_proxima_datos.setText("")
 
-            # Tabla de sesiones
+            # Tabla de sesiones (para docente: solo las de sus talleres)
             self.tabla_sesiones.setRowCount(len(sesiones))
 
             for row, sesion in enumerate(sesiones):

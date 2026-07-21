@@ -12,7 +12,7 @@ from datetime import date
 from services.asistencia_service import AsistenciaService
 from services.taller_service import TallerService
 from database.connection import get_session
-from models import Sesion
+from models import Sesion, Usuario
 
 
 class PanelRegistrarAsistencia(QWidget):
@@ -34,6 +34,7 @@ class PanelRegistrarAsistencia(QWidget):
         self.taller_seleccionado_id = None
         self.sesion_seleccionada_id = None
         self._sesion_congelada = False
+        self._puede_editar_actual = False   # ← nuevo
         self.docente_talleres = []  # Si es docente, sus talleres
         self._timer = QTimer(singleShot=True, interval=300)
         self._timer.timeout.connect(self._filtrar_tabla)
@@ -193,11 +194,21 @@ class PanelRegistrarAsistencia(QWidget):
 
         lay.addSpacing(6)
 
+        lay.addSpacing(6)
+
         self.btn_guardar_asistencia = QPushButton("💾  Guardar Asistencia")
         self.btn_guardar_asistencia.setObjectName("btn_guardar_asistencia")
         self.btn_guardar_asistencia.setEnabled(False)
         self.btn_guardar_asistencia.clicked.connect(self._guardar_asistencia)
         lay.addWidget(self.btn_guardar_asistencia)
+
+        # ── Solo el administrador puede autorizar a un docente ──────────
+        if self.sesion.rol_nombre == "Administrador":
+            lay.addSpacing(6)
+            self.btn_autorizar_docente = QPushButton("🔓  Autorizar a un docente")
+            self.btn_autorizar_docente.setObjectName("btn_autorizar_docente")
+            self.btn_autorizar_docente.clicked.connect(self._autorizar_docente)
+            lay.addWidget(self.btn_autorizar_docente)
 
         return lay
 
@@ -305,6 +316,7 @@ class PanelRegistrarAsistencia(QWidget):
             self.btn_todos_presentes.setEnabled(False)
             self.btn_todos_ausentes.setEnabled(False)
             self.btn_guardar_asistencia.setEnabled(False)
+            self._puede_editar_actual = False
             return
 
         row = rows[0].row()
@@ -314,11 +326,21 @@ class PanelRegistrarAsistencia(QWidget):
         self.sesion_seleccionada_id = sesion_id
         self._sesion_congelada = "🔒" in estado
 
-        self.btn_todos_presentes.setEnabled(not self._sesion_congelada)
-        self.btn_todos_ausentes.setEnabled(not self._sesion_congelada)
-        self.btn_guardar_asistencia.setEnabled(not self._sesion_congelada)
+        # ✅ Ya no basta con "no está congelada": el admin siempre puede,
+        # y un docente puede si fue autorizado puntualmente para esta sesión.
+        self._puede_editar_actual = (
+            not self._sesion_congelada
+            or AsistenciaService.puede_editar_sesion_congelada(
+                sesion_id, self.sesion.usuario_id, self.sesion.rol_nombre
+            )
+        )
+
+        self.btn_todos_presentes.setEnabled(self._puede_editar_actual)
+        self.btn_todos_ausentes.setEnabled(self._puede_editar_actual)
+        self.btn_guardar_asistencia.setEnabled(self._puede_editar_actual)
 
         self._cargar_asistencia_sesion()
+
 
     def _cargar_asistencia_sesion(self):
         """Carga asistencia de la sesión seleccionada."""
@@ -359,7 +381,7 @@ class PanelRegistrarAsistencia(QWidget):
             combo.addItem("Justificado", "J")
             idx = combo.findData(estado_actual) if estado_actual else -1
             combo.setCurrentIndex(idx if idx >= 0 else 0)
-            combo.setEnabled(not self._sesion_congelada)
+            combo.setEnabled(self._puede_editar_actual)
             self._actualizar_color_combo(combo, combo.currentData())
             combo.currentIndexChanged.connect(
                 lambda _, c=combo: self._actualizar_color_combo(c, c.currentData())
@@ -382,7 +404,7 @@ class PanelRegistrarAsistencia(QWidget):
             campo_obs = QLineEdit(asist.get("observacion", ""))
             campo_obs.setObjectName("inp_obs_asistencia")
             campo_obs.setPlaceholderText("Obligatoria si Justificado…")
-            campo_obs.setEnabled(not self._sesion_congelada)
+            campo_obs.setEnabled(self._puede_editar_actual)
             self.tabla_asistencia.setCellWidget(row, 5, campo_obs)
 
     def _actualizar_color_combo(self, combo: QComboBox, estado: str):
@@ -515,7 +537,8 @@ class PanelRegistrarAsistencia(QWidget):
                 inscripcion_id=insc_id,
                 estado=estado,
                 usuario_id=self.sesion.usuario_id,
-                observacion=observacion
+                observacion=observacion,
+                rol_usuario=self.sesion.rol_nombre   # ← nuevo
             )
 
             if res.ok:
@@ -548,6 +571,61 @@ class PanelRegistrarAsistencia(QWidget):
         QMessageBox.information(self, "Resultado", mensaje)
 
         self._cargar_asistencia_sesion()
+
+
+    def _autorizar_docente(self):
+        """
+        Permite al administrador autorizar a un docente a editar la
+        asistencia de la sesión seleccionada aunque esté congelada,
+        típicamente porque el docente lo solicitó.
+        """
+        if not self.sesion_seleccionada_id:
+            QMessageBox.warning(self, "Error", "Selecciona primero una sesión.")
+            return
+
+        username, ok = QInputDialog.getText(
+            self, "Autorizar edición",
+            "Usuario del docente que solicita el permiso:"
+        )
+        if not ok or not username.strip():
+            return
+
+        razon, ok = QInputDialog.getText(
+            self, "Motivo de la solicitud",
+            "Motivo (opcional):"
+        )
+        if not ok:
+            razon = ""
+
+        docente_id = None
+        try:
+            with get_session() as session:
+                docente = session.query(Usuario).filter(
+                    Usuario.username == username.strip()
+                ).first()
+                if docente:
+                    docente_id = docente.id
+        except Exception:
+            docente_id = None
+
+        if not docente_id:
+            QMessageBox.warning(self, "Error",
+                "No se encontró un docente con ese usuario.")
+            return
+
+        resultado = AsistenciaService.autorizar_edicion_congelada(
+            sesion_id=self.sesion_seleccionada_id,
+            docente_id=docente_id,
+            usuario_id=self.sesion.usuario_id,
+            rol_solicitante=self.sesion.rol_nombre,
+            razon=razon.strip()
+        )
+
+        if resultado.ok:
+            QMessageBox.information(self, "Éxito", resultado.mensaje)
+            self._on_seleccionar_sesion()  # refresca habilitación de botones
+        else:
+            QMessageBox.warning(self, "Error", resultado.mensaje)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -1,30 +1,14 @@
-"""
-utils/exportar_pdf.py   ──   Exportación a PDF
-═════════════════════════════════════════════════
-
-Utilidades para exportar datos a archivos PDF.
-Requiere: pip install reportlab
-
-USO:
-    from utils.exportar_pdf import ExportarPDF
-    
-    ExportarPDF.lista_aptos(
-        datos=resultado.datos,
-        estudiantes=resultado.lista,
-        ruta="/ruta/al/archivo.pdf"
-    )
-"""
-
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
-
+from services.configuracion_service import ConfiguracionService
 try:
     from reportlab.lib.pagesizes import letter, A4
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import inch
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,  PageBreak, Image
     from reportlab.platypus import PageBreak
     REPORTLAB_AVAILABLE = True
 except ImportError:
@@ -37,17 +21,7 @@ class ExportarPDF:
     @staticmethod
     def lista_aptos(datos: Dict, estudiantes: Dict[str, List],
                     ruta: str = None) -> bool:
-        """
-        Exporta lista de aptos a PDF con formato profesional.
-        
-        PARÁMETROS:
-            datos: dict con información del taller
-            estudiantes: dict con "aptos" y "desaptos"
-            ruta: ruta de descarga (si None, usa Desktop)
-        
-        RETORNA:
-            bool: True si éxito
-        """
+
         if not REPORTLAB_AVAILABLE:
             print("❌ reportlab no está instalado. Usa: pip install reportlab")
             return False
@@ -79,29 +53,77 @@ class ExportarPDF:
 
             # ── Estilos ──────────────────────────────────────────────
             styles = getSampleStyleSheet()
-            
-            titulo_style = ParagraphStyle(
-                'Titulo',
-                parent=styles['Heading1'],
-                fontSize=24,
-                textColor=colors.HexColor('#534AB7'),
-                spaceAfter=12,
-                alignment=1  # Center
+                        
+            titulo_principal = ParagraphStyle(
+                "TituloPrincipal",
+                parent=styles["Heading1"],
+                alignment=TA_CENTER,
+                fontSize=20,
+                textColor=colors.HexColor("#1E3A8A"),
+                spaceAfter=4,
             )
 
-            subtitulo_style = ParagraphStyle(
-                'Subtitulo',
-                parent=styles['Normal'],
+            subtitulo = ParagraphStyle(
+                "Subtitulo",
+                parent=styles["Normal"],
+                alignment=TA_CENTER,
                 fontSize=11,
-                textColor=colors.HexColor('#000000'),
-                spaceAfter=6
+                textColor=colors.HexColor("#374151"),
             )
 
-            # ── Contenido del documento ──────────────────────────────
+            titulo_seccion = ParagraphStyle(
+                "TituloSeccion",
+                parent=styles["Heading2"],
+                fontSize=14,
+                textColor=colors.white,
+                backColor=colors.HexColor("#1E3A8A"),
+                alignment=TA_CENTER,
+                spaceBefore=10,
+                spaceAfter=10,
+            )
+
+            texto = ParagraphStyle(
+                "Texto",
+                parent=styles["Normal"],
+                fontSize=10,
+                leading=18
+            )
+
+            # ── Contenido del documento ─────────────────────────────
+
             contenido = []
 
+            try:
+                resultado = ConfiguracionService.obtener()
+                if resultado.ok:
+                    config = resultado.datos
+
+                    ruta_logo = ConfiguracionService.obtener_ruta_logo_absoluta(config.get("logo_ruta"))
+                    if Path(ruta_logo).exists():
+                        logo = Image(ruta_logo)
+                        logo.drawWidth = 70
+                        logo.drawHeight = 70
+
+                    else:
+                        logo = Paragraph("", texto)
+
+            except:
+                logo = Paragraph("", texto)
+
+            contenido.append(Paragraph("UNIVERSIDAD NACIONAL DE BARRANCA",
+                    ParagraphStyle(
+                        "Universidad",
+                        parent=styles["Heading2"],
+                        alignment=1,
+                        textColor=colors.HexColor("#534AB7"),
+                        fontSize=16,
+                        spaceAfter=4
+                    )
+                )
+            )
+
             # Título
-            contenido.append(Paragraph("LISTA DE APTOS", titulo_style))
+            contenido.append(Paragraph("LISTA DE APTOS", titulo_principal))
             contenido.append(Spacer(1, 12))
 
             # Información del taller
@@ -115,7 +137,7 @@ class ExportarPDF:
             ]
 
             for line in info_lines:
-                contenido.append(Paragraph(line, subtitulo_style))
+                contenido.append(Paragraph(line, subtitulo))
 
             contenido.append(Spacer(1, 12))
 
@@ -123,7 +145,7 @@ class ExportarPDF:
             aptos = estudiantes.get('aptos', [])
             
             if aptos:
-                contenido.append(Paragraph("✅ ESTUDIANTES APTOS", titulo_style))
+                contenido.append(Paragraph("ESTUDIANTES APTOS", titulo_seccion))
                 
                 tabla_data = [["Nombre", "DNI", "Código", "Carrera", "Asistencia", "Estado"]]
                 
@@ -159,7 +181,7 @@ class ExportarPDF:
             
             if desaptos:
                 contenido.append(PageBreak())  # Nueva página si es necesario
-                contenido.append(Paragraph("❌ ESTUDIANTES DESAPTOS", titulo_style))
+                contenido.append(Paragraph("ESTUDIANTES NO APTOS", titulo_seccion))
                 
                 tabla_data = [["Nombre", "DNI", "Código", "Carrera", "Asistencia", "Estado"]]
                 
@@ -196,12 +218,12 @@ class ExportarPDF:
             
             resumen_lines = [
                 f"<b>Estudiantes Aptos:</b> {len(aptos)}",
-                f"<b>Estudiantes Desaptos:</b> {len(desaptos)}",
+                f"<b>Estudiantes No aptos:</b> {len(desaptos)}",
                 f"<b>Total de Inscritos:</b> {len(aptos) + len(desaptos)}",
             ]
 
             for line in resumen_lines:
-                contenido.append(Paragraph(line, subtitulo_style))
+                contenido.append(Paragraph(line, subtitulo))
 
             # ── Generar PDF ──────────────────────────────────────────
             doc.build(contenido)
